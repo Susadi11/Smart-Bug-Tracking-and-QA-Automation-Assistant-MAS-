@@ -2,43 +2,58 @@ import { useState } from 'react'
 import './App.css'
 
 const MODELS = [
-  { id: 'llama3:8b',    label: 'Llama 3 8B',      ram: '8GB',  speed: 'Balanced',  tag: 'Recommended' },
-  { id: 'phi3',         label: 'Phi-3 Mini',       ram: '4GB',  speed: 'Fast',      tag: 'Low RAM' },
-  { id: 'phi3:medium',  label: 'Phi-3 Medium',     ram: '8GB',  speed: 'Balanced',  tag: null },
-  { id: 'qwen:7b',      label: 'Qwen 7B',          ram: '8GB',  speed: 'Balanced',  tag: null },
-  { id: 'qwen:1.8b',    label: 'Qwen 1.8B',        ram: '4GB',  speed: 'Fast',      tag: 'Low RAM' },
-  { id: 'mistral',      label: 'Mistral 7B',       ram: '8GB',  speed: 'Balanced',  tag: null },
-  { id: 'gemma:2b',     label: 'Gemma 2B',         ram: '4GB',  speed: 'Fast',      tag: 'Low RAM' },
-  { id: 'gemma:7b',     label: 'Gemma 7B',         ram: '8GB',  speed: 'Balanced',  tag: null },
-  { id: 'codellama',    label: 'CodeLlama 7B',     ram: '8GB',  speed: 'Balanced',  tag: 'Code' },
-  { id: 'deepseek-coder:6.7b', label: 'DeepSeek Coder', ram: '8GB', speed: 'Balanced', tag: 'Code' },
-  { id: 'llama3:70b',   label: 'Llama 3 70B',      ram: '32GB', speed: 'Slow',      tag: 'High RAM' },
-  { id: 'mixtral',      label: 'Mixtral 8x7B',     ram: '32GB', speed: 'Slow',      tag: 'High RAM' },
+  { id: 'llama3:8b',           label: 'Llama 3 8B',      ram: '8GB',  tag: 'Recommended' },
+  { id: 'phi3',                label: 'Phi-3 Mini',       ram: '4GB',  tag: 'Low RAM' },
+  { id: 'phi3:medium',         label: 'Phi-3 Medium',     ram: '8GB',  tag: null },
+  { id: 'qwen:7b',             label: 'Qwen 7B',          ram: '8GB',  tag: null },
+  { id: 'qwen:1.8b',           label: 'Qwen 1.8B',        ram: '4GB',  tag: 'Low RAM' },
+  { id: 'mistral',             label: 'Mistral 7B',       ram: '8GB',  tag: null },
+  { id: 'gemma:2b',            label: 'Gemma 2B',         ram: '4GB',  tag: 'Low RAM' },
+  { id: 'codellama',           label: 'CodeLlama 7B',     ram: '8GB',  tag: 'Code' },
+  { id: 'deepseek-coder:6.7b', label: 'DeepSeek Coder',  ram: '8GB',  tag: 'Code' },
+]
+
+const CONTEXT_WINDOWS = [
+  { id: '2048', label: '2048 — default (recommended)' },
+  { id: '4096', label: '4096 — extended' },
+  { id: '8192', label: '8192 — large context' },
 ]
 
 const AGENTS = [
-  { key: 'bug_analysis',  label: 'Bug Analyzer',         num: 1, badge: 'badge-1' },
-  { key: 'test_cases',    label: 'Test Case Generator',  num: 2, badge: 'badge-2' },
-  { key: 'root_causes',   label: 'Root Cause Analyzer',  num: 3, badge: 'badge-3' },
-  { key: 'bug_report',    label: 'Bug Report Generator', num: 4, badge: 'badge-4' },
+  { key: 'bug_analysis', label: 'Bug Analyzer',         num: 1 },
+  { key: 'test_cases',   label: 'Test Case Generator',  num: 2 },
+  { key: 'root_causes',  label: 'Root Cause Analyzer',  num: 3 },
+  { key: 'bug_report',   label: 'Bug Report Generator', num: 4 },
+]
+
+const TABS = [
+  { key: 'bug_analysis', label: 'Bug Analysis' },
+  { key: 'test_cases',   label: 'Test Cases' },
+  { key: 'root_causes',  label: 'Root Causes' },
+  { key: 'bug_report',   label: 'Bug Report' },
 ]
 
 const MOCK = {
   bug_analysis: {
     title: 'Login button unresponsive on mobile Safari',
     severity: 'High', priority: 'P1',
-    steps: ['Open app on iOS Safari 17', 'Navigate to login screen', 'Enter valid credentials', 'Tap the Login button'],
+    steps: [
+      'Open app on iOS Safari 17',
+      'Navigate to login screen',
+      'Enter valid credentials',
+      'Tap the Login button',
+    ],
     expected: 'User is authenticated and redirected to dashboard',
     actual: 'Button tap registers no action — no network request fired',
     components: ['AuthController', 'LoginView', 'TouchEventHandler'],
   },
   test_cases: [
     { id: 'TC-01', type: 'Positive', desc: 'Login with valid credentials on Safari iOS 17' },
-    { id: 'TC-02', type: 'Negative', desc: 'Login with invalid password shows clear error' },
-    { id: 'TC-03', type: 'Edge',     desc: 'Login button behavior when soft keyboard is open' },
+    { id: 'TC-02', type: 'Negative', desc: 'Login with invalid password shows clear error message' },
+    { id: 'TC-03', type: 'Edge',     desc: 'Login button state when soft keyboard is open' },
     { id: 'TC-04', type: 'Edge',     desc: 'Double-tap does not trigger duplicate auth requests' },
-    { id: 'TC-05', type: 'Negative', desc: 'Empty fields blocked with inline validation' },
-    { id: 'TC-06', type: 'Positive', desc: 'Login succeeds after failed attempt with correct credentials' },
+    { id: 'TC-05', type: 'Negative', desc: 'Empty fields blocked with inline validation message' },
+    { id: 'TC-06', type: 'Positive', desc: 'Successful login after a previously failed attempt' },
   ],
   root_causes: [
     { cause: 'Touch event blocked by overlapping invisible DOM element', likelihood: 'High' },
@@ -48,306 +63,347 @@ const MOCK = {
   ],
   bug_report: `## Bug Report — BUG-2024-0112
 
-**Title:** Login button unresponsive on mobile Safari
-**Severity:** High  |  **Priority:** P1
-**Reporter:** QA Automation MAS
-**Date:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+Title    : Login button unresponsive on mobile Safari
+Severity : High  |  Priority: P1
+Reporter : QA Automation MAS
+Date     : ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
 
----
+────────────────────────────────────────
 
-### Summary
-The login button on the authentication screen is non-functional when accessed via iOS Safari 17. Users are unable to sign in, causing a complete service disruption on iOS devices.
+SUMMARY
+The login button on the authentication screen is non-functional
+when accessed via iOS Safari 17. Users are unable to sign in,
+causing a complete service disruption on iOS devices.
 
-### Environment
-- **Platform:** iOS 17 / Safari
-- **Build:** v2.4.1-prod
-- **Affects:** All iOS Safari users
+ENVIRONMENT
+  Platform : iOS 17 / Safari
+  Build    : v2.4.1-prod
+  Scope    : All iOS Safari users
 
-### Steps to Reproduce
-1. Open the app on iOS Safari 17
-2. Navigate to the login screen
-3. Enter valid credentials
-4. Tap the Login button
+STEPS TO REPRODUCE
+  1. Open the app on iOS Safari 17
+  2. Navigate to the login screen
+  3. Enter valid credentials
+  4. Tap the Login button
 
-### Expected vs Actual
-- **Expected:** Authentication succeeds, user redirected to dashboard
-- **Actual:** No response on tap, no network request initiated
+EXPECTED VS ACTUAL
+  Expected : User authenticated and redirected to dashboard
+  Actual   : No response on tap, no network request initiated
 
-### Root Cause (Most Likely)
-Touch event propagation blocked by an overlapping invisible DOM element introduced in the v2.4.0 layout refactor.
+ROOT CAUSE (MOST LIKELY)
+Touch event propagation blocked by an overlapping invisible DOM
+element introduced in the v2.4.0 layout refactor.
 
-### Recommended Fix
-Inspect z-index stacking context on \`.auth-overlay\` and remove or reposition the blocking layer. Verify touch event listeners are correctly bound post-render.
+RECOMMENDED FIX
+Inspect z-index stacking context on .auth-overlay and remove or
+reposition the blocking layer. Verify touch event listeners are
+correctly bound post-render.
 
-### Test Coverage Required
+TEST COVERAGE REQUIRED
 TC-01, TC-02, TC-03, TC-04, TC-05, TC-06 must pass before closing.`,
 }
 
-function AgentResultCard({ agentKey, data, badge, label, num, visible }) {
-  const tc = { Positive: 'tc-pos', Negative: 'tc-neg', Edge: 'tc-edge' }
-  const lh = { High: 'lh-high', Medium: 'lh-med', Low: 'lh-low' }
-
-  return (
-    <div className={`result-card ${visible ? 'card-visible' : ''}`}>
-      <div className="card-head">
-        <span className={`a-badge ${badge}`}>Agent {num}</span>
-        <h3 className="card-title">{label}</h3>
-        {visible && <span className="card-done">✓ Complete</span>}
-      </div>
-
-      {!visible && (
-        <div className="card-waiting">
-          <span className="waiting-dot" /><span className="waiting-dot" /><span className="waiting-dot" />
-          <span>Waiting…</span>
-        </div>
-      )}
-
-      {visible && agentKey === 'bug_analysis' && (
-        <div className="card-body">
-          <div className="ba-title">{data.title}</div>
-          <div className="ba-badges">
-            <span className="sev-badge">{data.severity}</span>
-            <span className="pri-badge">{data.priority}</span>
-          </div>
-          <div className="ba-grid">
-            <div>
-              <div className="blabel">Steps to Reproduce</div>
-              <ol className="ba-steps">{data.steps.map((s,i) => <li key={i}>{s}</li>)}</ol>
-            </div>
-            <div>
-              <div className="blabel">Expected</div>
-              <p className="ba-text">{data.expected}</p>
-              <div className="blabel" style={{marginTop:14}}>Actual</div>
-              <p className="ba-text red">{data.actual}</p>
-            </div>
-          </div>
-          <div className="blabel" style={{marginTop:16}}>Affected Components</div>
-          <div className="tag-row">{data.components.map(c => <span key={c} className="comp-tag">{c}</span>)}</div>
-        </div>
-      )}
-
-      {visible && agentKey === 'test_cases' && (
-        <div className="card-body">
-          {data.map(tc_item => (
-            <div key={tc_item.id} className="tc-row">
-              <span className="tc-id">{tc_item.id}</span>
-              <span className={`tc-type ${tc[tc_item.type]}`}>{tc_item.type}</span>
-              <span className="tc-desc">{tc_item.desc}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {visible && agentKey === 'root_causes' && (
-        <div className="card-body">
-          {data.map((rc, i) => (
-            <div key={i} className="rc-row">
-              <span className={`rc-lh ${lh[rc.likelihood]}`}>{rc.likelihood}</span>
-              <span className="rc-cause">{rc.cause}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {visible && agentKey === 'bug_report' && (
-        <div className="card-body">
-          <button className="copy-btn" onClick={() => navigator.clipboard.writeText(data)}>
-            Copy Report
-          </button>
-          <pre className="report-pre">{data}</pre>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function App() {
-  const [model, setModel] = useState('llama3:8b')
-  const [temperature, setTemperature] = useState(0.3)
-  const [bugText, setBugText] = useState('')
-  const [running, setRunning] = useState(false)
-  const [activeAgent, setActiveAgent] = useState(null)
-  const [doneAgents, setDoneAgents] = useState([])
-  const [revealed, setRevealed] = useState({})
-  const [started, setStarted] = useState(false)
+  const [model, setModel]         = useState('llama3:8b')
+  const [ctx, setCtx]             = useState('2048')
+  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
+  const [bugText, setBugText]     = useState('')
+  const [running, setRunning]     = useState(false)
+  const [progress, setProgress]   = useState(0)
+  const [activeAgent, setActive]  = useState(null)
+  const [doneAgents, setDone]     = useState([])
+  const [revealed, setRevealed]   = useState({})
+  const [activeTab, setTab]       = useState('bug_analysis')
+  const [started, setStarted]     = useState(false)
+  const [warnings, setWarnings]   = useState([])
 
-  async function handleSubmit(e) {
+  async function handleRun(e) {
     e.preventDefault()
     if (!bugText.trim() || running) return
     setStarted(true)
     setRunning(true)
-    setDoneAgents([])
+    setDone([])
     setRevealed({})
-    setActiveAgent(null)
+    setProgress(0)
+    setActive(null)
+    setWarnings([])
+    setTab('bug_analysis')
 
-    for (const agent of AGENTS) {
-      setActiveAgent(agent.key)
-      await new Promise(r => setTimeout(r, 1400 + Math.random() * 800))
-      setDoneAgents(prev => [...prev, agent.key])
+    for (let i = 0; i < AGENTS.length; i++) {
+      const agent  = AGENTS[i]
+      setActive(agent.key)
+      const pStart = (i / AGENTS.length) * 100
+      const pEnd   = ((i + 1) / AGENTS.length) * 100
+      for (let s = 0; s <= 24; s++) {
+        setProgress(Math.round(pStart + (pEnd - pStart) * (s / 24)))
+        await new Promise(r => setTimeout(r, 55 + Math.random() * 25))
+      }
+      setDone(prev => [...prev, agent.key])
       setRevealed(prev => ({ ...prev, [agent.key]: true }))
+      setTab(agent.key)
     }
-    setActiveAgent(null)
+    setActive(null)
+    setProgress(100)
+    setWarnings([
+      '[BugAnalyzerAgent] Severity inferred from description — please verify manually.',
+      '[TestCaseGeneratorAgent] TC-03 may need device-specific validation.',
+    ])
     setRunning(false)
   }
 
-  const selectedModel = MODELS.find(m => m.id === model)
+  const tcColor = { Positive: 'tc-pos', Negative: 'tc-neg', Edge: 'tc-edge' }
+  const lhColor = { High: 'lh-high', Medium: 'lh-med', Low: 'lh-low' }
 
   return (
     <div className="app">
-      <header className="header">
-        <div className="hlogo">
-          <span className="hlogo-icon">⬡</span>
-          <span className="hlogo-name">BugMAS</span>
-          <span className="hlogo-sep" />
-          <span className="hlogo-sub">Smart Bug Tracking &amp; QA Automation</span>
-        </div>
-        <div className="hright">
-          <span className="hstatus">
-            <span className="hstatus-dot" />
-            Ollama Local
-          </span>
-        </div>
-      </header>
 
+      {/* ── NAVBAR ─────────────────────────────── */}
+      <nav className="navbar">
+        <div className="nav-inner">
+          <div className="nav-brand">
+            <span className="nav-hex">⬡</span>
+            <span className="nav-name">BugMAS</span>
+            <span className="nav-div" />
+            <span className="nav-sub">Smart Bug Tracking &amp; QA Automation</span>
+          </div>
+          <div className="nav-right">
+            <span className="nav-status">
+              <span className="ns-dot" />
+              Ollama · Local
+            </span>
+          </div>
+        </div>
+      </nav>
+
+      {/* ── HERO ───────────────────────────────── */}
+      <section className="hero">
+        <div className="hero-inner">
+          <h1 className="hero-h1">
+            Smart Bug Tracking<br />
+            <span className="hero-dim">&amp; QA Automation.</span>
+          </h1>
+          <p className="hero-p">
+            Describe any bug in plain language. Four specialized AI agents analyze it,
+            generate test cases, identify root causes, and produce a professional report.
+          </p>
+        </div>
+      </section>
+
+      {/* ── PAGE ───────────────────────────────── */}
       <div className="page">
-        {/* ── LEFT PANEL ── */}
-        <aside className="left-panel">
-          <section className="panel-card">
-            <div className="panel-title">Model</div>
-            <div className="model-list">
-              {MODELS.map(m => (
-                <button
-                  key={m.id}
-                  className={`model-item ${model === m.id ? 'model-selected' : ''}`}
-                  onClick={() => setModel(m.id)}
-                  disabled={running}
-                >
-                  <div className="mi-top">
-                    <span className="mi-name">{m.label}</span>
-                    {m.tag && (
-                      <span className={`mi-tag ${
-                        m.tag === 'Recommended' ? 'tag-blue' :
-                        m.tag === 'Low RAM' ? 'tag-green' :
-                        m.tag === 'Code' ? 'tag-purple' :
-                        'tag-orange'
-                      }`}>{m.tag}</span>
-                    )}
-                  </div>
-                  <div className="mi-meta">
-                    <span>{m.ram} RAM</span>
-                    <span className="mi-dot">·</span>
-                    <span>{m.speed}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
 
-          <section className="panel-card">
-            <div className="panel-title">Parameters</div>
-            <div className="param-row">
-              <label className="param-label">
-                Temperature
-                <span className="param-val">{temperature}</span>
-              </label>
-              <input
-                type="range" min="0" max="1" step="0.1"
-                value={temperature}
-                onChange={e => setTemperature(parseFloat(e.target.value))}
-                className="slider"
-                disabled={running}
-              />
-              <div className="slider-hints">
-                <span>Precise</span><span>Creative</span>
-              </div>
-            </div>
-            <div className="param-row" style={{marginTop:14}}>
-              <label className="param-label">Selected Model</label>
-              <div className="param-info">
-                <span className="pi-name">{selectedModel?.label}</span>
-                <span className="pi-ram">{selectedModel?.ram} RAM required</span>
-              </div>
-            </div>
-          </section>
+        {/* ══ TOP — Input form ══ */}
+        <section className="card">
+          <div className="card-head-row">
+            <span className="card-label">New Pipeline Run</span>
+          </div>
 
-          <section className="panel-card pipeline-card">
-            <div className="panel-title">Agent Pipeline</div>
-            <div className="pipeline-steps">
-              {AGENTS.map((agent) => {
-                const isDone = doneAgents.includes(agent.key)
-                const isActive = activeAgent === agent.key
-                return (
-                  <div key={agent.key} className={`ps-row ${isDone ? 'ps-done' : ''} ${isActive ? 'ps-active' : ''}`}>
-                    <div className="ps-icon">
-                      {isDone ? <span className="ps-check">✓</span>
-                        : isActive ? <span className="ps-pulse" />
-                        : <span className="ps-num">{agent.num}</span>}
-                    </div>
-                    <div className="ps-info">
-                      <span className="ps-name">{agent.label}</span>
-                      <span className="ps-status">
-                        {isDone ? 'Complete' : isActive ? 'Processing…' : 'Queued'}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        </aside>
-
-        {/* ── MAIN CONTENT ── */}
-        <main className="content">
-          <section className="input-card">
-            <div className="input-card-head">
-              <div>
-                <div className="panel-title">Bug Description</div>
-                <p className="input-hint">Describe the bug in natural language — Agent 1 will analyze and extract structured details</p>
-              </div>
-            </div>
-            <form onSubmit={handleSubmit}>
+          <div className="form-grid">
+            {/* Bug description — left */}
+            <div className="form-left">
+              <label className="fl">Feature Request / Bug Description</label>
               <textarea
-                className="bug-textarea"
-                placeholder="e.g. When a user taps the login button on Safari iOS 17, nothing happens. No error appears and no network request is made. The same flow works correctly on Chrome desktop and Android. This started occurring after the v2.4.0 release last Tuesday."
+                className="textarea"
+                rows={7}
+                placeholder="Describe the bug in natural language…&#10;&#10;e.g. When a user taps login on Safari iOS 17, nothing happens. No error is shown and no network request is made. The same flow works on Chrome and Android."
                 value={bugText}
                 onChange={e => setBugText(e.target.value)}
-                rows={6}
                 disabled={running}
               />
-              <div className="input-foot">
-                <span className="char-count">{bugText.length} characters</span>
-                <button type="submit" className="run-btn" disabled={running || !bugText.trim()}>
-                  {running ? (
-                    <><span className="btn-spinner" /> Analyzing with {selectedModel?.label}…</>
-                  ) : (
-                    <><span className="btn-arrow">→</span> Run Analysis</>
-                  )}
-                </button>
-              </div>
-            </form>
-          </section>
+            </div>
 
-          {started && (
-            <div className="results-area">
-              {AGENTS.map(agent => (
-                <AgentResultCard
-                  key={agent.key}
-                  agentKey={agent.key}
-                  data={MOCK[agent.key]}
-                  badge={agent.badge}
-                  label={agent.label}
-                  num={agent.num}
-                  visible={!!revealed[agent.key]}
+            {/* Settings — right */}
+            <div className="form-right">
+              <div className="form-field">
+                <label className="fl">Model</label>
+                <select className="fselect" value={model} onChange={e => setModel(e.target.value)} disabled={running}>
+                  {MODELS.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.label} ({m.ram} RAM){m.tag ? ` · ${m.tag}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-field">
+                <label className="fl">Ollama URL</label>
+                <input
+                  className="finput"
+                  value={ollamaUrl}
+                  onChange={e => setOllamaUrl(e.target.value)}
+                  disabled={running}
+                  placeholder="http://localhost:11434"
                 />
+              </div>
+
+              <div className="form-field">
+                <label className="fl">Context Window (tokens)</label>
+                <select className="fselect" value={ctx} onChange={e => setCtx(e.target.value)} disabled={running}>
+                  {CONTEXT_WINDOWS.map(c => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+                <p className="fhint">Ensure your model supports the selected context size.</p>
+              </div>
+
+              <button className="run-btn" onClick={handleRun} disabled={running || !bugText.trim()}>
+                {running
+                  ? <><span className="run-spin" /> Pipeline Running…</>
+                  : 'Run Pipeline →'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ══ BOTTOM — Live status ══ */}
+        <section className="card">
+          <div className="card-head-row">
+            <span className="card-label">Live Status</span>
+            <span className={`status-pill ${running ? 'sp-run' : started ? 'sp-done' : 'sp-idle'}`}>
+              {running ? 'RUNNING' : started ? 'COMPLETE' : 'IDLE'}
+            </span>
+            <div className="stat-group">
+              <div className="stat">
+                <span className="sk">PROGRESS</span>
+                <span className="sv">{progress}%</span>
+              </div>
+              <div className="stat">
+                <span className="sk">ACTIVE AGENT</span>
+                <span className="sv">
+                  {activeAgent ? AGENTS.find(a => a.key === activeAgent)?.label : '—'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="pbar-track">
+            <div className="pbar-fill" style={{ width: `${progress}%` }} />
+          </div>
+
+          {/* Agent steps */}
+          <div className="agent-row">
+            {AGENTS.map(agent => {
+              const done   = doneAgents.includes(agent.key)
+              const active = activeAgent === agent.key
+              return (
+                <div key={agent.key} className={`astep ${done ? 'as-done' : active ? 'as-active' : ''}`}>
+                  <div className="adot">
+                    {done   ? <span className="dot-ok"   /> :
+                     active ? <span className="dot-spin" /> :
+                              <span className="dot-q"    />}
+                  </div>
+                  <div className="ainfo">
+                    <span className="aname">{agent.label}</span>
+                    <span className="abadge">
+                      {done ? 'COMPLETED' : active ? 'RUNNING' : 'QUEUED'}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* ══ RESULTS ══ */}
+        {started && (
+          <section className="card">
+            <div className="card-head-row">
+              <span className="card-label">Pipeline Activity</span>
+            </div>
+
+            {/* Tabs */}
+            <div className="tabs">
+              {TABS.map(tab => (
+                <button
+                  key={tab.key}
+                  className={`tab ${activeTab === tab.key ? 'tab-on' : ''} ${!revealed[tab.key] ? 'tab-lock' : ''}`}
+                  onClick={() => revealed[tab.key] && setTab(tab.key)}
+                >
+                  {tab.label}
+                  {revealed[tab.key] && <span className="tab-dot" />}
+                </button>
               ))}
             </div>
-          )}
-        </main>
+
+            <div className="tab-body">
+              {!revealed[activeTab] && (
+                <div className="wait-row">
+                  <span className="wd" /><span className="wd" /><span className="wd" />
+                  <span>Waiting for agent to complete…</span>
+                </div>
+              )}
+
+              {revealed[activeTab] && activeTab === 'bug_analysis' && (
+                <div className="rb anim-in">
+                  <div className="rb-title">{MOCK.bug_analysis.title}</div>
+                  <div className="rb-pills">
+                    <span className="pill-sev">Severity: {MOCK.bug_analysis.severity}</span>
+                    <span className="pill-pri">Priority: {MOCK.bug_analysis.priority}</span>
+                  </div>
+                  <div className="rb-2col">
+                    <div>
+                      <div className="rl">Steps to Reproduce</div>
+                      <ol className="rsteps">{MOCK.bug_analysis.steps.map((s,i) => <li key={i}>{s}</li>)}</ol>
+                    </div>
+                    <div>
+                      <div className="rl">Expected</div>
+                      <p className="rt">{MOCK.bug_analysis.expected}</p>
+                      <div className="rl" style={{marginTop:14}}>Actual</div>
+                      <p className="rt rt-red">{MOCK.bug_analysis.actual}</p>
+                    </div>
+                  </div>
+                  <div className="rl" style={{marginTop:18}}>Affected Components</div>
+                  <div className="rtags">
+                    {MOCK.bug_analysis.components.map(c => <span key={c} className="rtag">{c}</span>)}
+                  </div>
+                </div>
+              )}
+
+              {revealed[activeTab] && activeTab === 'test_cases' && (
+                <div className="rb anim-in">
+                  {MOCK.test_cases.map(tc => (
+                    <div key={tc.id} className="tc-row">
+                      <span className="tc-id">{tc.id}</span>
+                      <span className={`tc-type ${tcColor[tc.type]}`}>{tc.type}</span>
+                      <span className="tc-desc">{tc.desc}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {revealed[activeTab] && activeTab === 'root_causes' && (
+                <div className="rb anim-in">
+                  {MOCK.root_causes.map((rc, i) => (
+                    <div key={i} className="rc-row">
+                      <span className={`rc-lh ${lhColor[rc.likelihood]}`}>{rc.likelihood}</span>
+                      <span className="rc-txt">{rc.cause}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {revealed[activeTab] && activeTab === 'bug_report' && (
+                <div className="rb anim-in">
+                  <button className="copy-btn" onClick={() => navigator.clipboard.writeText(MOCK.bug_report)}>
+                    Copy Report
+                  </button>
+                  <pre className="report-pre">{MOCK.bug_report}</pre>
+                </div>
+              )}
+            </div>
+
+            {warnings.length > 0 && (
+              <div className="warns">
+                <div className="wt">Errors &amp; Warnings</div>
+                {warnings.map((w, i) => <div key={i} className="wr">· {w}</div>)}
+              </div>
+            )}
+          </section>
+        )}
+
       </div>
 
-      <footer className="footer">
-        SE4010 CTSE Assignment 2 · Smart Bug Tracking &amp; QA Automation MAS · Powered by Ollama + LangGraph · Zero Cloud Cost
-      </footer>
     </div>
   )
 }
