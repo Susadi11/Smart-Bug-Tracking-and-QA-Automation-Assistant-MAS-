@@ -103,23 +103,48 @@ TEST COVERAGE REQUIRED
 TC-01, TC-02, TC-03, TC-04, TC-05, TC-06 must pass before closing.`,
 }
 
+const ACTION_VERBS = ['click','tap','login','logout','submit','open','close','load','crash','fail','error','navigate','scroll','type','enter','select','upload','download','sign','register','delete','save','update','create','search','filter','sort','render','display','show','hide','redirect','refresh','request','fetch','send','receive','connect','disconnect']
+
+function validateBug(text) {
+  if (text.trim().length < 30) return 'Description is too short — add more detail (min 30 characters).'
+  const lower = text.toLowerCase()
+  const hasVerb = ACTION_VERBS.some(v => lower.includes(v))
+  if (!hasVerb) return 'No action detected — describe what the user did (e.g. "clicked", "submitted", "opened").'
+  return null
+}
+
 export default function App() {
-  const [model, setModel]         = useState('llama3:8b')
-  const [ctx, setCtx]             = useState('2048')
-  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
-  const [bugText, setBugText]     = useState('')
-  const [running, setRunning]     = useState(false)
-  const [progress, setProgress]   = useState(0)
-  const [activeAgent, setActive]  = useState(null)
-  const [doneAgents, setDone]     = useState([])
-  const [revealed, setRevealed]   = useState({})
-  const [activeTab, setTab]       = useState('bug_analysis')
-  const [started, setStarted]     = useState(false)
-  const [warnings, setWarnings]   = useState([])
+  const [model, setModel]           = useState('llama3:8b')
+  const [ctx, setCtx]               = useState('2048')
+  const [ollamaUrl, setOllamaUrl]   = useState('http://localhost:11434')
+  const [bugText, setBugText]       = useState('')
+  const [codeSnippet, setCode]      = useState('')
+  const [showCode, setShowCode]     = useState(false)
+  const [platform, setPlatform]     = useState('')
+  const [appVersion, setAppVersion] = useState('')
+  const [severity, setSeverity]     = useState('')
+  const [validErr, setValidErr]     = useState(null)
+  const [running, setRunning]       = useState(false)
+  const [progress, setProgress]     = useState(0)
+  const [activeAgent, setActive]    = useState(null)
+  const [doneAgents, setDone]       = useState([])
+  const [revealed, setRevealed]     = useState({})
+  const [activeTab, setTab]         = useState('bug_analysis')
+  const [started, setStarted]       = useState(false)
+  const [warnings, setWarnings]     = useState([])
+
+  function handleBugChange(e) {
+    const val = e.target.value
+    setBugText(val)
+    if (validErr) setValidErr(validateBug(val))
+  }
 
   async function handleRun(e) {
     e.preventDefault()
-    if (!bugText.trim() || running) return
+    const err = validateBug(bugText)
+    if (err) { setValidErr(err); return }
+    setValidErr(null)
+    if (running) return
     setStarted(true)
     setRunning(true)
     setDone([])
@@ -199,20 +224,99 @@ export default function App() {
           </div>
 
           <div className="form-grid">
-            {/* Bug description — left */}
+
+            {/* ── LEFT: bug input ── */}
             <div className="form-left">
-              <label className="fl">Feature Request / Bug Description</label>
-              <textarea
-                className="textarea"
-                rows={7}
-                placeholder="Describe the bug in natural language…&#10;&#10;e.g. When a user taps login on Safari iOS 17, nothing happens. No error is shown and no network request is made. The same flow works on Chrome and Android."
-                value={bugText}
-                onChange={e => setBugText(e.target.value)}
-                disabled={running}
-              />
+
+              {/* Bug description */}
+              <div className="form-field">
+                <label className="fl">
+                  Bug Description
+                  <span className="fl-req">required</span>
+                </label>
+                <textarea
+                  className={`textarea ${validErr ? 'textarea-err' : ''}`}
+                  rows={6}
+                  placeholder="Describe the bug in natural language…&#10;&#10;e.g. When a user taps the login button on Safari iOS 17, nothing happens. No error is shown and no network request is fired. The same flow works on Chrome and Android."
+                  value={bugText}
+                  onChange={handleBugChange}
+                  disabled={running}
+                />
+                {validErr && <p className="field-err">{validErr}</p>}
+                <p className="fhint">{bugText.length} chars · min 30 · describe what the user did and what happened</p>
+              </div>
+
+              {/* Environment row */}
+              <div className="env-row">
+                <div className="form-field">
+                  <label className="fl">Platform</label>
+                  <select className="fselect" value={platform} onChange={e => setPlatform(e.target.value)} disabled={running}>
+                    <option value="">Select…</option>
+                    <option>iOS Safari</option>
+                    <option>Android Chrome</option>
+                    <option>Web — Chrome</option>
+                    <option>Web — Firefox</option>
+                    <option>Web — Safari</option>
+                    <option>Desktop App</option>
+                    <option>API / Backend</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label className="fl">App Version</label>
+                  <input
+                    className="finput"
+                    value={appVersion}
+                    onChange={e => setAppVersion(e.target.value)}
+                    disabled={running}
+                    placeholder="e.g. v2.4.1"
+                  />
+                </div>
+                <div className="form-field">
+                  <label className="fl">Severity (guess)</label>
+                  <select className="fselect" value={severity} onChange={e => setSeverity(e.target.value)} disabled={running}>
+                    <option value="">Unknown</option>
+                    <option>Critical</option>
+                    <option>High</option>
+                    <option>Medium</option>
+                    <option>Low</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Code snippet toggle */}
+              <div className="code-section">
+                <button
+                  type="button"
+                  className="code-toggle"
+                  onClick={() => setShowCode(p => !p)}
+                  disabled={running}
+                >
+                  <span className="ct-icon">{showCode ? '▾' : '▸'}</span>
+                  Code Snippet
+                  <span className="ct-badge">optional — helps Agent 1 &amp; 3</span>
+                </button>
+
+                {showCode && (
+                  <div className="code-body">
+                    <p className="fhint" style={{marginBottom: 8}}>
+                      Paste the relevant function, component, or API handler. Agent 1 uses this to extract affected components and Agent 3 uses it for root cause analysis.
+                    </p>
+                    <textarea
+                      className="code-textarea"
+                      rows={8}
+                      placeholder="// paste relevant code here&#10;function handleLogin(e) {&#10;  e.preventDefault()&#10;  // ...&#10;}"
+                      value={codeSnippet}
+                      onChange={e => setCode(e.target.value)}
+                      disabled={running}
+                      spellCheck={false}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Settings — right */}
+            {/* ── RIGHT: settings ── */}
             <div className="form-right">
               <div className="form-field">
                 <label className="fl">Model</label>
@@ -244,6 +348,35 @@ export default function App() {
                   ))}
                 </select>
                 <p className="fhint">Ensure your model supports the selected context size.</p>
+              </div>
+
+              {/* Input summary */}
+              <div className="input-summary">
+                <div className="is-title">Input Summary</div>
+                <div className="is-row">
+                  <span className="is-k">Description</span>
+                  <span className={`is-v ${bugText.trim().length >= 30 ? 'isv-ok' : 'isv-no'}`}>
+                    {bugText.trim().length >= 30 ? '✓ Ready' : '✗ Too short'}
+                  </span>
+                </div>
+                <div className="is-row">
+                  <span className="is-k">Platform</span>
+                  <span className={`is-v ${platform ? 'isv-ok' : 'isv-dim'}`}>{platform || 'Not set'}</span>
+                </div>
+                <div className="is-row">
+                  <span className="is-k">Version</span>
+                  <span className={`is-v ${appVersion ? 'isv-ok' : 'isv-dim'}`}>{appVersion || 'Not set'}</span>
+                </div>
+                <div className="is-row">
+                  <span className="is-k">Severity</span>
+                  <span className={`is-v ${severity ? 'isv-ok' : 'isv-dim'}`}>{severity || 'Unknown'}</span>
+                </div>
+                <div className="is-row">
+                  <span className="is-k">Code Snippet</span>
+                  <span className={`is-v ${codeSnippet.trim() ? 'isv-ok' : 'isv-dim'}`}>
+                    {codeSnippet.trim() ? `✓ ${codeSnippet.trim().split('\n').length} lines` : 'None'}
+                  </span>
+                </div>
               </div>
 
               <button className="run-btn" onClick={handleRun} disabled={running || !bugText.trim()}>
