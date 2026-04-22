@@ -1,29 +1,34 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 const MODELS = [
-  { id: 'llama3:8b',           label: 'Llama 3 8B',      ram: '8GB',  tag: 'Recommended' },
-  { id: 'phi3',                label: 'Phi-3 Mini',       ram: '4GB',  tag: 'Low RAM' },
-  { id: 'phi3:medium',         label: 'Phi-3 Medium',     ram: '8GB',  tag: null },
-  { id: 'qwen:7b',             label: 'Qwen 7B',          ram: '8GB',  tag: null },
-  { id: 'qwen:1.8b',           label: 'Qwen 1.8B',        ram: '4GB',  tag: 'Low RAM' },
-  { id: 'mistral',             label: 'Mistral 7B',       ram: '8GB',  tag: null },
-  { id: 'gemma:2b',            label: 'Gemma 2B',         ram: '4GB',  tag: 'Low RAM' },
-  { id: 'codellama',           label: 'CodeLlama 7B',     ram: '8GB',  tag: 'Code' },
-  { id: 'deepseek-coder:6.7b', label: 'DeepSeek Coder',  ram: '8GB',  tag: 'Code' },
+  { id: 'tinyllama',     label: 'TinyLlama 1.1B',  note: '~600 MB · fastest' },
+  { id: 'qwen2:0.5b',   label: 'Qwen2 0.5B',       note: '~350 MB · ultra-light' },
+  { id: 'gemma:2b',     label: 'Gemma 2B',          note: '~1.4 GB · lightweight' },
+  { id: 'phi3:mini',    label: 'Phi-3 Mini 3.8B',   note: '~2.2 GB · smart & fast' },
+  { id: 'mistral:7b',   label: 'Mistral 7B',        note: '~4.1 GB · balanced' },
+  { id: 'qwen:7b',      label: 'Qwen 7B',           note: '~4.5 GB · balanced' },
+  { id: 'llama3:8b',    label: 'Llama 3 8B',        note: '~4.7 GB · recommended' },
+  { id: 'codellama:7b', label: 'Code Llama 7B',     note: '~3.8 GB · code-focused' },
+  { id: '__custom__',   label: 'Custom model…',     note: 'enter name manually' },
 ]
 
 const CONTEXT_WINDOWS = [
-  { id: '2048', label: '2048 — default (recommended)' },
+  { id: '512',  label: '512' },
+  { id: '1024', label: '1024' },
+  { id: '2048', label: '2048 — default' },
   { id: '4096', label: '4096 — extended' },
-  { id: '8192', label: '8192 — large context' },
+  { id: '8192', label: '8192 — large' },
 ]
 
+// key = API step key, resultKey = key in API result{}
 const AGENTS = [
-  { key: 'bug_analysis', label: 'Bug Analyzer',         num: 1 },
-  { key: 'test_cases',   label: 'Test Case Generator',  num: 2 },
-  { key: 'root_causes',  label: 'Root Cause Analyzer',  num: 3 },
-  { key: 'bug_report',   label: 'Bug Report Generator', num: 4 },
+  { key: 'bug_analyzer',         resultKey: 'bug_analysis', label: 'Bug Analyzer',         num: 1 },
+  { key: 'test_case_generator',  resultKey: 'test_cases',   label: 'Test Case Generator',  num: 2 },
+  { key: 'root_cause_analyzer',  resultKey: 'root_causes',  label: 'Root Cause Analyzer',  num: 3 },
+  { key: 'bug_report_generator', resultKey: 'bug_report',   label: 'Bug Report Generator', num: 4 },
 ]
 
 const TABS = [
@@ -33,88 +38,25 @@ const TABS = [
   { key: 'bug_report',   label: 'Bug Report' },
 ]
 
-const MOCK = {
-  bug_analysis: {
-    title: 'Login button unresponsive on mobile Safari',
-    severity: 'High', priority: 'P1',
-    steps: [
-      'Open app on iOS Safari 17',
-      'Navigate to login screen',
-      'Enter valid credentials',
-      'Tap the Login button',
-    ],
-    expected: 'User is authenticated and redirected to dashboard',
-    actual: 'Button tap registers no action — no network request fired',
-    components: ['AuthController', 'LoginView', 'TouchEventHandler'],
-  },
-  test_cases: [
-    { id: 'TC-01', type: 'Positive', desc: 'Login with valid credentials on Safari iOS 17' },
-    { id: 'TC-02', type: 'Negative', desc: 'Login with invalid password shows clear error message' },
-    { id: 'TC-03', type: 'Edge',     desc: 'Login button state when soft keyboard is open' },
-    { id: 'TC-04', type: 'Edge',     desc: 'Double-tap does not trigger duplicate auth requests' },
-    { id: 'TC-05', type: 'Negative', desc: 'Empty fields blocked with inline validation message' },
-    { id: 'TC-06', type: 'Positive', desc: 'Successful login after a previously failed attempt' },
-  ],
-  root_causes: [
-    { cause: 'Touch event blocked by overlapping invisible DOM element', likelihood: 'High' },
-    { cause: 'CSS pointer-events: none applied incorrectly to button wrapper', likelihood: 'Medium' },
-    { cause: 'JavaScript event listener not re-attached after dynamic re-render', likelihood: 'Medium' },
-    { cause: 'Safari-specific passive event listener conflict on touch handlers', likelihood: 'Low' },
-  ],
-  bug_report: `## Bug Report — BUG-2024-0112
-
-Title    : Login button unresponsive on mobile Safari
-Severity : High  |  Priority: P1
-Reporter : QA Automation MAS
-Date     : ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-
-────────────────────────────────────────
-
-SUMMARY
-The login button on the authentication screen is non-functional
-when accessed via iOS Safari 17. Users are unable to sign in,
-causing a complete service disruption on iOS devices.
-
-ENVIRONMENT
-  Platform : iOS 17 / Safari
-  Build    : v2.4.1-prod
-  Scope    : All iOS Safari users
-
-STEPS TO REPRODUCE
-  1. Open the app on iOS Safari 17
-  2. Navigate to the login screen
-  3. Enter valid credentials
-  4. Tap the Login button
-
-EXPECTED VS ACTUAL
-  Expected : User authenticated and redirected to dashboard
-  Actual   : No response on tap, no network request initiated
-
-ROOT CAUSE (MOST LIKELY)
-Touch event propagation blocked by an overlapping invisible DOM
-element introduced in the v2.4.0 layout refactor.
-
-RECOMMENDED FIX
-Inspect z-index stacking context on .auth-overlay and remove or
-reposition the blocking layer. Verify touch event listeners are
-correctly bound post-render.
-
-TEST COVERAGE REQUIRED
-TC-01, TC-02, TC-03, TC-04, TC-05, TC-06 must pass before closing.`,
-}
-
-const ACTION_VERBS = ['click','tap','login','logout','submit','open','close','load','crash','fail','error','navigate','scroll','type','enter','select','upload','download','sign','register','delete','save','update','create','search','filter','sort','render','display','show','hide','redirect','refresh','request','fetch','send','receive','connect','disconnect']
+const ACTION_VERBS = [
+  'click','tap','login','logout','submit','open','close','load','crash','fail',
+  'error','navigate','scroll','type','enter','select','upload','download','sign',
+  'register','delete','save','update','create','search','filter','sort','render',
+  'display','show','hide','redirect','refresh','request','fetch','send','receive',
+  'connect','disconnect',
+]
 
 function validateBug(text) {
   if (text.trim().length < 30) return 'Description is too short — add more detail (min 30 characters).'
   const lower = text.toLowerCase()
-  const hasVerb = ACTION_VERBS.some(v => lower.includes(v))
-  if (!hasVerb) return 'No action detected — describe what the user did (e.g. "clicked", "submitted", "opened").'
+  if (!ACTION_VERBS.some(v => lower.includes(v)))
+    return 'No action detected — describe what the user did (e.g. "clicked", "submitted", "opened").'
   return null
 }
 
 export default function App() {
-  const [model, setModel]           = useState('llama3:8b')
+  const [model, setModel]           = useState('phi3:mini')
+  const [customModel, setCustom]    = useState('')
   const [ctx, setCtx]               = useState('2048')
   const [ollamaUrl, setOllamaUrl]   = useState('http://localhost:11434')
   const [bugText, setBugText]       = useState('')
@@ -126,12 +68,31 @@ export default function App() {
   const [validErr, setValidErr]     = useState(null)
   const [running, setRunning]       = useState(false)
   const [progress, setProgress]     = useState(0)
-  const [activeAgent, setActive]    = useState(null)
-  const [doneAgents, setDone]       = useState([])
-  const [revealed, setRevealed]     = useState({})
+  const [activeAgent, setActive]    = useState(null)   // step key
+  const [doneAgents, setDone]       = useState([])     // step keys
+  const [revealed, setRevealed]     = useState({})     // result keys
   const [activeTab, setTab]         = useState('bug_analysis')
   const [started, setStarted]       = useState(false)
-  const [warnings, setWarnings]     = useState([])
+  const [result, setResult]         = useState({})
+  const [apiErrors, setApiErrors]   = useState([])
+  const [submitErr, setSubmitErr]   = useState(null)
+
+  // Load default model from backend .env on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/api/config`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(cfg => {
+        if (!cfg.default_model) return
+        const known = MODELS.find(m => m.id === cfg.default_model)
+        if (known && known.id !== '__custom__') {
+          setModel(cfg.default_model)
+        } else {
+          setModel('__custom__')
+          setCustom(cfg.default_model)
+        }
+      })
+      .catch(() => {}) // keep phi3:mini if backend unreachable
+  }, [])
 
   function handleBugChange(e) {
     const val = e.target.value
@@ -139,45 +100,124 @@ export default function App() {
     if (validErr) setValidErr(validateBug(val))
   }
 
+  const effectiveModel = model === '__custom__'
+    ? (customModel.trim() || 'phi3:mini')
+    : model
+
   async function handleRun(e) {
     e.preventDefault()
     const err = validateBug(bugText)
     if (err) { setValidErr(err); return }
     setValidErr(null)
+    setSubmitErr(null)
     if (running) return
+
     setStarted(true)
     setRunning(true)
     setDone([])
     setRevealed({})
+    setResult({})
+    setApiErrors([])
     setProgress(0)
     setActive(null)
-    setWarnings([])
     setTab('bug_analysis')
 
-    for (let i = 0; i < AGENTS.length; i++) {
-      const agent  = AGENTS[i]
-      setActive(agent.key)
-      const pStart = (i / AGENTS.length) * 100
-      const pEnd   = ((i + 1) / AGENTS.length) * 100
-      for (let s = 0; s <= 24; s++) {
-        setProgress(Math.round(pStart + (pEnd - pStart) * (s / 24)))
-        await new Promise(r => setTimeout(r, 55 + Math.random() * 25))
+    try {
+      const resp = await fetch(`${API_BASE}/api/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          bug_description: bugText,
+          code_snippet:    codeSnippet.trim() || null,
+          platform:        platform  || null,
+          app_version:     appVersion || null,
+          user_severity:   severity  || null,
+          model_name:      effectiveModel,
+          ollama_base_url: ollamaUrl,
+          num_ctx:         parseInt(ctx),
+        }),
+      })
+
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}))
+        throw new Error(body?.detail?.message || `HTTP ${resp.status}`)
       }
-      setDone(prev => [...prev, agent.key])
-      setRevealed(prev => ({ ...prev, [agent.key]: true }))
-      setTab(agent.key)
+
+      const { run_id } = await resp.json()
+      await pollRun(run_id)
+
+    } catch (exc) {
+      setSubmitErr(`Failed to start pipeline: ${exc.message}`)
+      setRunning(false)
     }
-    setActive(null)
-    setProgress(100)
-    setWarnings([
-      '[BugAnalyzerAgent] Severity inferred from description — please verify manually.',
-      '[TestCaseGeneratorAgent] TC-03 may need device-specific validation.',
-    ])
-    setRunning(false)
+  }
+
+  async function pollRun(runId) {
+    let delay = 1500
+    let consecutiveErrors = 0
+
+    while (true) {
+      await new Promise(r => setTimeout(r, delay))
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/runs/${runId}`, { cache: 'no-store' })
+        if (!resp.ok) throw new Error('fetch failed')
+        const run = await resp.json()
+
+        // Progress & active agent
+        setProgress(run.progress_percent)
+        const activeStep = run.steps.find(s => s.status === 'running')
+        setActive(activeStep?.key ?? null)
+
+        // Completed step keys
+        const done = run.steps.filter(s => s.status === 'completed').map(s => s.key)
+        setDone(done)
+
+        // Reveal tabs for all completed agents (even if they have no output yet)
+        const newRevealed = {}
+        run.steps.forEach(step => {
+          if (step.status === 'completed') {
+            const agent = AGENTS.find(a => a.key === step.key)
+            if (agent) newRevealed[agent.resultKey] = true
+          }
+        })
+        setRevealed(newRevealed)
+
+        // Auto-switch to latest completed tab
+        const latestDone = AGENTS.filter(a => done.includes(a.key)).at(-1)
+        if (latestDone) setTab(latestDone.resultKey)
+
+        consecutiveErrors = 0
+        delay = Math.min(delay * 1.5, 12000)
+
+        if (run.status === 'completed' || run.status === 'failed') {
+          setResult(run.result || {})
+          setApiErrors(run.errors || [])
+          setProgress(100)
+          setActive(null)
+          setRunning(false)
+          break
+        }
+
+      } catch {
+        consecutiveErrors++
+        if (consecutiveErrors >= 5) {
+          setSubmitErr('Lost connection to backend after 5 retries.')
+          setRunning(false)
+          break
+        }
+      }
+    }
   }
 
   const tcColor = { Positive: 'tc-pos', Negative: 'tc-neg', Edge: 'tc-edge' }
   const lhColor = { High: 'lh-high', Medium: 'lh-med', Low: 'lh-low' }
+
+  const ba = result.bug_analysis
+  const tc = result.test_cases
+  const rc = result.root_causes
+  const br = result.bug_report
 
   return (
     <div className="app">
@@ -214,10 +254,9 @@ export default function App() {
         </div>
       </section>
 
-      {/* ── PAGE ───────────────────────────────── */}
       <div className="page">
 
-        {/* ══ TOP — Input form ══ */}
+        {/* ══ INPUT FORM ══ */}
         <section className="card">
           <div className="card-head-row">
             <span className="card-label">New Pipeline Run</span>
@@ -227,8 +266,6 @@ export default function App() {
 
             {/* ── LEFT: bug input ── */}
             <div className="form-left">
-
-              {/* Bug description */}
               <div className="form-field">
                 <label className="fl">
                   Bug Description
@@ -237,7 +274,7 @@ export default function App() {
                 <textarea
                   className={`textarea ${validErr ? 'textarea-err' : ''}`}
                   rows={6}
-                  placeholder="Describe the bug in natural language…&#10;&#10;e.g. When a user taps the login button on Safari iOS 17, nothing happens. No error is shown and no network request is fired. The same flow works on Chrome and Android."
+                  placeholder="Describe the bug in natural language…&#10;&#10;e.g. When a user taps the login button on Safari iOS 17, nothing happens. No error is shown and no network request is fired."
                   value={bugText}
                   onChange={handleBugChange}
                   disabled={running}
@@ -246,7 +283,6 @@ export default function App() {
                 <p className="fhint">{bugText.length} chars · min 30 · describe what the user did and what happened</p>
               </div>
 
-              {/* Environment row */}
               <div className="env-row">
                 <div className="form-field">
                   <label className="fl">Platform</label>
@@ -284,28 +320,21 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Code snippet toggle */}
               <div className="code-section">
-                <button
-                  type="button"
-                  className="code-toggle"
-                  onClick={() => setShowCode(p => !p)}
-                  disabled={running}
-                >
+                <button type="button" className="code-toggle" onClick={() => setShowCode(p => !p)} disabled={running}>
                   <span className="ct-icon">{showCode ? '▾' : '▸'}</span>
                   Code Snippet
                   <span className="ct-badge">optional — helps Agent 1 &amp; 3</span>
                 </button>
-
                 {showCode && (
                   <div className="code-body">
-                    <p className="fhint" style={{marginBottom: 8}}>
-                      Paste the relevant function, component, or API handler. Agent 1 uses this to extract affected components and Agent 3 uses it for root cause analysis.
+                    <p className="fhint" style={{ marginBottom: 8 }}>
+                      Paste the relevant function or component. Agent 1 uses this to identify affected components.
                     </p>
                     <textarea
                       className="code-textarea"
                       rows={8}
-                      placeholder="// paste relevant code here&#10;function handleLogin(e) {&#10;  e.preventDefault()&#10;  // ...&#10;}"
+                      placeholder="// paste relevant code here"
                       value={codeSnippet}
                       onChange={e => setCode(e.target.value)}
                       disabled={running}
@@ -322,11 +351,19 @@ export default function App() {
                 <label className="fl">Model</label>
                 <select className="fselect" value={model} onChange={e => setModel(e.target.value)} disabled={running}>
                   {MODELS.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.label} ({m.ram} RAM){m.tag ? ` · ${m.tag}` : ''}
-                    </option>
+                    <option key={m.id} value={m.id}>{m.label} · {m.note}</option>
                   ))}
                 </select>
+                {model === '__custom__' && (
+                  <input
+                    className="finput"
+                    style={{ marginTop: 6 }}
+                    placeholder="e.g. llama3:8b"
+                    value={customModel}
+                    onChange={e => setCustom(e.target.value)}
+                    disabled={running}
+                  />
+                )}
               </div>
 
               <div className="form-field">
@@ -350,7 +387,6 @@ export default function App() {
                 <p className="fhint">Ensure your model supports the selected context size.</p>
               </div>
 
-              {/* Input summary */}
               <div className="input-summary">
                 <div className="is-title">Input Summary</div>
                 <div className="is-row">
@@ -379,6 +415,8 @@ export default function App() {
                 </div>
               </div>
 
+              {submitErr && <p className="field-err" style={{ marginTop: 8 }}>{submitErr}</p>}
+
               <button className="run-btn" onClick={handleRun} disabled={running || !bugText.trim()}>
                 {running
                   ? <><span className="run-spin" /> Pipeline Running…</>
@@ -388,7 +426,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* ══ BOTTOM — Live status ══ */}
+        {/* ══ LIVE STATUS ══ */}
         <section className="card">
           <div className="card-head-row">
             <span className="card-label">Live Status</span>
@@ -409,12 +447,10 @@ export default function App() {
             </div>
           </div>
 
-          {/* Progress bar */}
           <div className="pbar-track">
             <div className="pbar-fill" style={{ width: `${progress}%` }} />
           </div>
 
-          {/* Agent steps */}
           <div className="agent-row">
             {AGENTS.map(agent => {
               const done   = doneAgents.includes(agent.key)
@@ -438,14 +474,13 @@ export default function App() {
           </div>
         </section>
 
-        {/* ══ RESULTS ══ */}
+        {/* ══ PIPELINE OUTPUT ══ */}
         {started && (
           <section className="card">
             <div className="card-head-row">
-              <span className="card-label">Pipeline Activity</span>
+              <span className="card-label">Pipeline Output</span>
             </div>
 
-            {/* Tabs */}
             <div className="tabs">
               {TABS.map(tab => (
                 <button
@@ -460,6 +495,7 @@ export default function App() {
             </div>
 
             <div className="tab-body">
+
               {!revealed[activeTab] && (
                 <div className="wait-row">
                   <span className="wd" /><span className="wd" /><span className="wd" />
@@ -467,76 +503,101 @@ export default function App() {
                 </div>
               )}
 
+              {/* ── Bug Analysis (Agent 1) ── */}
               {revealed[activeTab] && activeTab === 'bug_analysis' && (
                 <div className="rb anim-in">
-                  <div className="rb-title">{MOCK.bug_analysis.title}</div>
-                  <div className="rb-pills">
-                    <span className="pill-sev">Severity: {MOCK.bug_analysis.severity}</span>
-                    <span className="pill-pri">Priority: {MOCK.bug_analysis.priority}</span>
-                  </div>
-                  <div className="rb-2col">
-                    <div>
-                      <div className="rl">Steps to Reproduce</div>
-                      <ol className="rsteps">{MOCK.bug_analysis.steps.map((s,i) => <li key={i}>{s}</li>)}</ol>
-                    </div>
-                    <div>
-                      <div className="rl">Expected</div>
-                      <p className="rt">{MOCK.bug_analysis.expected}</p>
-                      <div className="rl" style={{marginTop:14}}>Actual</div>
-                      <p className="rt rt-red">{MOCK.bug_analysis.actual}</p>
-                    </div>
-                  </div>
-                  <div className="rl" style={{marginTop:18}}>Affected Components</div>
-                  <div className="rtags">
-                    {MOCK.bug_analysis.components.map(c => <span key={c} className="rtag">{c}</span>)}
-                  </div>
+                  {ba ? (
+                    <>
+                      <div className="rb-title">{ba.title}</div>
+                      <div className="rb-pills">
+                        <span className="pill-sev">Severity: {ba.severity}</span>
+                        <span className="pill-pri">Priority: {ba.priority}</span>
+                      </div>
+                      <div className="rb-2col">
+                        <div>
+                          <div className="rl">Steps to Reproduce</div>
+                          <ol className="rsteps">
+                            {ba.steps_to_reproduce.map((s, i) => <li key={i}>{s}</li>)}
+                          </ol>
+                        </div>
+                        <div>
+                          <div className="rl">Expected</div>
+                          <p className="rt">{ba.expected_result}</p>
+                          <div className="rl" style={{ marginTop: 14 }}>Actual</div>
+                          <p className="rt rt-red">{ba.actual_result}</p>
+                        </div>
+                      </div>
+                      <div className="rl" style={{ marginTop: 18 }}>Affected Components</div>
+                      <div className="rtags">
+                        {ba.affected_components.map(c => <span key={c} className="rtag">{c}</span>)}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="not-impl">Agent 1 produced no output — check backend logs.</div>
+                  )}
                 </div>
               )}
 
+              {/* ── Test Cases (Agent 2) ── */}
               {revealed[activeTab] && activeTab === 'test_cases' && (
                 <div className="rb anim-in">
-                  {MOCK.test_cases.map(tc => (
-                    <div key={tc.id} className="tc-row">
-                      <span className="tc-id">{tc.id}</span>
-                      <span className={`tc-type ${tcColor[tc.type]}`}>{tc.type}</span>
-                      <span className="tc-desc">{tc.desc}</span>
-                    </div>
-                  ))}
+                  {tc && tc.length > 0 ? (
+                    tc.map(t => (
+                      <div key={t.id} className="tc-row">
+                        <span className="tc-id">{t.id}</span>
+                        <span className={`tc-type ${tcColor[t.type] || ''}`}>{t.type}</span>
+                        <span className="tc-desc">{t.description}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="not-impl">Agent 2 — Test Case Generator not yet implemented.</div>
+                  )}
                 </div>
               )}
 
+              {/* ── Root Causes (Agent 3) ── */}
               {revealed[activeTab] && activeTab === 'root_causes' && (
                 <div className="rb anim-in">
-                  {MOCK.root_causes.map((rc, i) => (
-                    <div key={i} className="rc-row">
-                      <span className={`rc-lh ${lhColor[rc.likelihood]}`}>{rc.likelihood}</span>
-                      <span className="rc-txt">{rc.cause}</span>
-                    </div>
-                  ))}
+                  {rc && rc.length > 0 ? (
+                    rc.map((r, i) => (
+                      <div key={i} className="rc-row">
+                        <span className={`rc-lh ${lhColor[r.likelihood] || ''}`}>{r.likelihood}</span>
+                        <span className="rc-txt">{r.cause}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="not-impl">Agent 3 — Root Cause Analyzer not yet implemented.</div>
+                  )}
                 </div>
               )}
 
+              {/* ── Bug Report (Agent 4) ── */}
               {revealed[activeTab] && activeTab === 'bug_report' && (
                 <div className="rb anim-in">
-                  <button className="copy-btn" onClick={() => navigator.clipboard.writeText(MOCK.bug_report)}>
-                    Copy Report
-                  </button>
-                  <pre className="report-pre">{MOCK.bug_report}</pre>
+                  {br ? (
+                    <>
+                      <button className="copy-btn" onClick={() => navigator.clipboard.writeText(br)}>
+                        Copy Report
+                      </button>
+                      <pre className="report-pre">{br}</pre>
+                    </>
+                  ) : (
+                    <div className="not-impl">Agent 4 — Bug Report Generator not yet implemented.</div>
+                  )}
                 </div>
               )}
             </div>
 
-            {warnings.length > 0 && (
+            {apiErrors.length > 0 && (
               <div className="warns">
                 <div className="wt">Errors &amp; Warnings</div>
-                {warnings.map((w, i) => <div key={i} className="wr">· {w}</div>)}
+                {apiErrors.map((w, i) => <div key={i} className="wr">· {w}</div>)}
               </div>
             )}
           </section>
         )}
 
       </div>
-
     </div>
   )
 }

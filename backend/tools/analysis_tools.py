@@ -1,5 +1,5 @@
 """
-Analysis tools: keyword/component extraction and static analysis.
+Analysis tools: keyword extraction, component detection, and static analysis.
 """
 
 import re
@@ -7,8 +7,7 @@ import subprocess
 from typing import List
 
 
-# ── Keyword & component extraction ────────────────────────────────────────────
-
+# Regex patterns mapping domain keywords to software component labels.
 _COMPONENT_PATTERNS = [
     (r"\b(login|logout|auth(?:entication)?|sign[- ]?in|sign[- ]?out|session|token|jwt|oauth)\b",
      "Authentication"),
@@ -36,6 +35,7 @@ _COMPONENT_PATTERNS = [
      "Permissions / Access Control"),
 ]
 
+# Common English stop words excluded from keyword extraction.
 _STOP_WORDS = {
     "the", "a", "an", "and", "or", "but", "in", "on", "at", "to",
     "for", "of", "with", "is", "was", "are", "were", "be", "been",
@@ -49,6 +49,19 @@ _STOP_WORDS = {
 
 
 def extract_keywords(text: str) -> List[str]:
+    """
+    Extract up to 20 unique, meaningful keywords from a bug description.
+
+    Tokenises the input using a regex that matches alphanumeric words of
+    three or more characters, filters out common English stop words, and
+    returns the remaining tokens in order of first appearance.
+
+    Args:
+        text: The raw bug description (may include code snippets).
+
+    Returns:
+        A deduplicated list of lowercase keywords, capped at 20 items.
+    """
     words = re.findall(r"[a-zA-Z][a-zA-Z0-9_\-]{2,}", text.lower())
     seen: set = set()
     keywords: List[str] = []
@@ -60,6 +73,20 @@ def extract_keywords(text: str) -> List[str]:
 
 
 def extract_affected_components(text: str) -> List[str]:
+    """
+    Identify software components likely affected by a bug.
+
+    Scans the input text against a predefined set of regex patterns that
+    map domain-specific terms (e.g. 'cart', 'login', 'sql') to
+    high-level component labels (e.g. 'Payment', 'Authentication',
+    'Database'). Returns ``["General / Unknown"]`` when no pattern matches.
+
+    Args:
+        text: The raw bug description to analyse.
+
+    Returns:
+        A deduplicated list of matched component labels.
+    """
     lower = text.lower()
     found: List[str] = []
     seen: set = set()
@@ -70,12 +97,18 @@ def extract_affected_components(text: str) -> List[str]:
     return found if found else ["General / Unknown"]
 
 
-# ── Static analysis (flake8) ──────────────────────────────────────────────────
-
 def run_static_analysis(file_path: str) -> dict:
     """
-    Run flake8 on file_path with --max-line-length=120.
-    Never raises. Returns issues list, count, and raw output.
+    Run flake8 on a Python file and return structured results.
+
+    Never raises — returns an empty issues list on failure.
+
+    Args:
+        file_path: Absolute or relative path to the Python file.
+
+    Returns:
+        Dict with keys ``issues`` (list of strings), ``issue_count`` (int),
+        and ``raw_output`` (str).
     """
     try:
         proc = subprocess.run(

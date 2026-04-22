@@ -762,6 +762,16 @@ body {
   line-height: 1.7;
 }
 
+/* ── Not-implemented placeholder ─────────────── */
+.not-impl {
+  padding: 28px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--txt-3);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--r);
+}
+
 /* ── Footer ──────────────────────────────────── */
 .footer {
   padding: 16px 28px;

@@ -1,16 +1,20 @@
-"""
-Code validation and formatting tools.
-"""
+"""Code validation and formatting tools."""
 
 import ast
 import re
-from typing import Optional
 
 
 def strip_markdown_fences(text: str) -> str:
     """
-    Extract content from ```language ... ``` fences.
+    Extract content from markdown code fences.
+
     Falls back to returning the raw text if no fences are found.
+
+    Args:
+        text: Raw string potentially containing ```language ... ``` fences.
+
+    Returns:
+        The extracted content, stripped of whitespace.
     """
     match = re.search(r"```(?:\w+)?\n?(.*?)```", text, re.DOTALL)
     return match.group(1).strip() if match else text.strip()
@@ -19,12 +23,17 @@ def strip_markdown_fences(text: str) -> str:
 def validate_python_code(code: str) -> dict:
     """
     Three-layer Python code validator.
+
+    Layer 1 — AST syntax check.
+    Layer 2 — Structure analysis (function count, type hints).
+    Layer 3 — Quality warnings (missing docstrings, bare excepts).
+
+    Args:
+        code: Python source code string to validate.
+
     Returns:
-      is_valid       — False if code has a syntax error
-      syntax_error   — error message or None
-      warnings       — list of quality issues
-      function_count — number of top-level functions
-      has_type_hints — True if any annotations are found
+        Dict with keys: is_valid, syntax_error, warnings,
+        function_count, has_type_hints.
     """
     result = {
         "is_valid": True,
@@ -34,7 +43,6 @@ def validate_python_code(code: str) -> dict:
         "has_type_hints": False,
     }
 
-    # Layer 1 — AST syntax check
     try:
         tree = ast.parse(code)
     except SyntaxError as exc:
@@ -42,14 +50,12 @@ def validate_python_code(code: str) -> dict:
         result["syntax_error"] = str(exc)
         return result
 
-    # Layer 2 — structure check
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             result["function_count"] += 1
             if node.returns or any(a.annotation for a in node.args.args):
                 result["has_type_hints"] = True
 
-    # Layer 3 — quality check
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if not (ast.get_docstring(node)):
@@ -57,7 +63,6 @@ def validate_python_code(code: str) -> dict:
         if isinstance(node, ast.ExceptHandler) and node.type is None:
             result["warnings"].append("Bare 'except:' clause found — catch specific exceptions")
 
-    # Unguarded top-level code check
     for node in tree.body:
         if isinstance(node, ast.Expr) and not isinstance(node.value, ast.Constant):
             result["warnings"].append("Unguarded top-level expression found")

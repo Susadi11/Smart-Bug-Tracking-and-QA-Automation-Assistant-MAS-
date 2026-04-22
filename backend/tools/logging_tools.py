@@ -1,10 +1,6 @@
-"""
-Structured logging tool for all agents.
-Each agent call writes a timestamped entry to logs/pipeline.log.
-"""
+"""Structured logging tool — writes timestamped entries to logs/pipeline.log."""
 
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -19,12 +15,13 @@ def _ensure_logs_dir() -> None:
 
 def log_agent_event(agent_name: str, event: str, payload: Dict[str, Any] | None = None) -> None:
     """
-    Append a structured log line to logs/pipeline.log.
+    Append a structured JSON log line to logs/pipeline.log.
 
     Args:
-        agent_name: e.g. "BugAnalyzer"
-        event:      e.g. "start", "success", "error"
-        payload:    optional dict with extra context (truncated for brevity)
+        agent_name: Name of the agent (e.g. "BugAnalyzer").
+        event:      Event type (e.g. "start", "success", "error").
+        payload:    Optional dict with extra context. Large string values
+                    are truncated to 200 characters for readability.
     """
     _ensure_logs_dir()
 
@@ -34,7 +31,6 @@ def log_agent_event(agent_name: str, event: str, payload: Dict[str, Any] | None 
         "event": event,
     }
     if payload:
-        # Truncate large string values so logs stay readable
         entry["data"] = {
             k: (v[:200] + "…" if isinstance(v, str) and len(v) > 200 else v)
             for k, v in payload.items()

@@ -1,12 +1,20 @@
 """
 FastAPI backend — run-based polling architecture.
-POST /api/runs  → start pipeline in background thread
-GET  /api/runs  → list all runs
-GET  /api/runs/{run_id} → get run details + agent outputs
+
+Endpoints:
+  POST /api/runs       → start pipeline, return run_id
+  GET  /api/runs       → list all runs
+  GET  /api/runs/{id}  → full run details + agent outputs
+  GET  /api/config     → default model from .env
 """
 
-import json
 import os
+
+# Bypass system proxy for local Ollama connections (macOS / Windows).
+os.environ.setdefault("NO_PROXY", "localhost,127.0.0.1")
+os.environ.setdefault("no_proxy", "localhost,127.0.0.1")
+
+import json
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -22,27 +30,33 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-from graph import build_graph
+from agents.bug_analyzer        import bug_analyzer_node
+from agents.test_case_generator import test_case_generator_node
+from agents.root_cause_analyzer import root_cause_analyzer_node
+from agents.bug_report_generator import bug_report_generator_node
 from state import AgentState
 
-# ── Config ─────────────────────────────────────────────────────────────────────
-
-RUNS_DIR  = Path("runs")
-LOGS_DIR  = Path("logs")
+RUNS_DIR = Path("runs")
+LOGS_DIR = Path("logs")
 RUNS_DIR.mkdir(exist_ok=True)
 LOGS_DIR.mkdir(exist_ok=True)
 
 PIPELINE_STEPS = [
-    {"key": "bug_analyzer",        "label": "Bug Analyzer"},
-    {"key": "test_case_generator", "label": "Test Case Generator"},
-    {"key": "root_cause_analyzer", "label": "Root Cause Analyzer"},
-    {"key": "bug_report_generator","label": "Bug Report Generator"},
+    {"key": "bug_analyzer",         "label": "Bug Analyzer"},
+    {"key": "test_case_generator",  "label": "Test Case Generator"},
+    {"key": "root_cause_analyzer",  "label": "Root Cause Analyzer"},
+    {"key": "bug_report_generator", "label": "Bug Report Generator"},
+]
+
+AGENT_FNS = [
+    bug_analyzer_node,
+    test_case_generator_node,
+    root_cause_analyzer_node,
+    bug_report_generator_node,
 ]
 
 _lock: threading.Lock = threading.Lock()
 _runs: Dict[str, dict] = {}
-
-# ── App ────────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Smart Bug Tracking & QA Automation Assistant", version="1.0.0")
 app.add_middleware(
@@ -52,7 +66,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Pydantic models ────────────────────────────────────────────────────────────
+
+# Pydantic request / response models
 
 class RunStatus(str, Enum):
     pending   = "pending"
@@ -67,25 +82,25 @@ class RunCreateRequest(BaseModel):
     platform:        Optional[str] = None
     app_version:     Optional[str] = None
     user_severity:   Optional[str] = None
-    model_name:      str = Field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "llama3:8b"))
-    ollama_base_url: str = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
-    num_ctx:         int = Field(default=2048, ge=512, le=32768)
+    model_name:      str  = Field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "phi3:mini"))
+    ollama_base_url: str  = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
+    num_ctx:         int  = Field(default=2048, ge=512, le=32768)
 
 
 class RunSummary(BaseModel):
-    run_id:            str
-    status:            RunStatus
-    progress_percent:  int
-    current_step_key:  Optional[str]
-    current_step_label:Optional[str]
-    started_at:        str
-    completed_at:      Optional[str]
+    run_id:             str
+    status:             RunStatus
+    progress_percent:   int
+    current_step_key:   Optional[str]
+    current_step_label: Optional[str]
+    started_at:         str
+    completed_at:       Optional[str]
 
 
 class StepResult(BaseModel):
     key:    str
     label:  str
-    status: str   # pending | running | completed | failed
+    status: str
 
 
 class RunDetails(RunSummary):
@@ -95,15 +110,16 @@ class RunDetails(RunSummary):
     log_path: str
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# Helpers
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 def _save_run(run: dict) -> None:
+    """Persist run state to disk as JSON."""
     path = RUNS_DIR / f"{run['run_id']}.json"
-    path.write_text(json.dumps(run, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _to_summary(run: dict) -> RunSummary:
@@ -128,26 +144,25 @@ def _to_details(run: dict) -> RunDetails:
     )
 
 
-# ── Background worker ──────────────────────────────────────────────────────────
+# Background pipeline worker
 
 def _pipeline_worker(run_id: str, req: RunCreateRequest) -> None:
+    """Execute all agents sequentially in a background thread."""
     with _lock:
         run = _runs[run_id]
         run["status"] = RunStatus.running
         _save_run(run)
 
     try:
-        # Set env vars for agents to pick up
-        os.environ["OLLAMA_MODEL"]      = req.model_name
-        os.environ["OLLAMA_BASE_URL"]   = req.ollama_base_url
-        os.environ["OLLAMA_NUM_CTX"]    = str(req.num_ctx)
+        os.environ["OLLAMA_MODEL"]    = req.model_name
+        os.environ["OLLAMA_BASE_URL"] = req.ollama_base_url
+        os.environ["OLLAMA_NUM_CTX"]  = str(req.num_ctx)
 
-        # Pull model if not already available
+        # Pull model if not already available (best-effort, non-blocking)
         try:
             with httpx.Client(timeout=10) as client:
-                tags_resp = client.get(f"{req.ollama_base_url}/api/tags")
-                names = [m["name"] for m in tags_resp.json().get("models", [])]
-                # normalise: "llama3:8b" and "llama3" both match "llama3:8b"
+                tags = client.get(f"{req.ollama_base_url}/api/tags").json()
+                names = [m["name"] for m in tags.get("models", [])]
                 if not any(req.model_name in n or n in req.model_name for n in names):
                     client.post(
                         f"{req.ollama_base_url}/api/pull",
@@ -155,12 +170,12 @@ def _pipeline_worker(run_id: str, req: RunCreateRequest) -> None:
                         timeout=600,
                     )
         except Exception:
-            pass  # best-effort; the LLM call itself will surface any real error
+            pass
 
-        log_path = run["log_path"]
-        graph = build_graph()
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        log_path = str(LOGS_DIR / f"run_{ts}_{run_id[:8]}.json")
 
-        initial_state: AgentState = {
+        state: AgentState = {
             "bug_description": req.bug_description,
             "code_snippet":    req.code_snippet,
             "platform":        req.platform,
@@ -174,40 +189,35 @@ def _pipeline_worker(run_id: str, req: RunCreateRequest) -> None:
             "errors":          [],
         }
 
-        # Stream node-by-node so we can update progress after each agent
-        step_keys = [s["key"] for s in PIPELINE_STEPS]
-        final_state = initial_state
+        for i, (step, agent_fn) in enumerate(zip(PIPELINE_STEPS, AGENT_FNS)):
+            with _lock:
+                run["steps"][i]["status"]   = "running"
+                run["current_step_key"]     = step["key"]
+                run["current_step_label"]   = step["label"]
+                _save_run(run)
 
-        for chunk in graph.stream(initial_state, stream_mode="updates"):
-            for node_name, state_update in chunk.items():
-                if node_name not in step_keys:
-                    continue
-                final_state = {**final_state, **state_update}
-                idx = step_keys.index(node_name)
+            state = agent_fn(state)
 
-                with _lock:
-                    run["steps"][idx]["status"] = "completed"
-                    run["progress_percent"] = (idx + 1) * 25
-                    run["current_step_key"]   = node_name
-                    run["current_step_label"] = PIPELINE_STEPS[idx]["label"]
-                    _save_run(run)
+            with _lock:
+                run["steps"][i]["status"] = "completed"
+                run["progress_percent"]   = (i + 1) * 25
+                _save_run(run)
 
-        # Build result payload
         result: Dict[str, Any] = {}
-        if final_state.get("bug_analysis"):
-            result["bug_analysis"] = dict(final_state["bug_analysis"])
-        if final_state.get("test_cases"):
-            result["test_cases"] = [dict(tc) for tc in final_state["test_cases"]]
-        if final_state.get("root_causes"):
-            result["root_causes"] = [dict(rc) for rc in final_state["root_causes"]]
-        if final_state.get("bug_report"):
-            result["bug_report"] = final_state["bug_report"]
+        if state.get("bug_analysis"):
+            result["bug_analysis"] = dict(state["bug_analysis"])
+        if state.get("test_cases"):
+            result["test_cases"] = [dict(tc) for tc in state["test_cases"]]
+        if state.get("root_causes"):
+            result["root_causes"] = [dict(rc) for rc in state["root_causes"]]
+        if state.get("bug_report"):
+            result["bug_report"] = state["bug_report"]
 
         with _lock:
             run["status"]       = RunStatus.completed
             run["completed_at"] = _now()
             run["result"]       = result
-            run["errors"]       = final_state.get("errors", [])
+            run["errors"]       = state.get("errors", [])
             _save_run(run)
 
     except Exception as exc:
@@ -218,7 +228,7 @@ def _pipeline_worker(run_id: str, req: RunCreateRequest) -> None:
             _save_run(run)
 
 
-# ── Startup: reload persisted runs ────────────────────────────────────────────
+# Startup — reload persisted runs from disk
 
 @app.on_event("startup")
 def _load_runs() -> None:
@@ -234,32 +244,39 @@ def _load_runs() -> None:
             pass
 
 
-# ── Endpoints ──────────────────────────────────────────────────────────────────
+# Endpoints
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
+@app.get("/api/config")
+def config():
+    """Return backend configuration for the frontend."""
+    return {
+        "default_model": os.getenv("OLLAMA_MODEL", "phi3:mini"),
+        "ollama_base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+    }
+
+
 @app.post("/api/runs", response_model=RunSummary, status_code=201)
 def create_run(req: RunCreateRequest):
-    run_id   = str(uuid.uuid4())
-    ts       = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    log_path = str(LOGS_DIR / f"run_{ts}_{run_id[:8]}.json")
+    run_id = str(uuid.uuid4())
 
     run = {
-        "run_id":            run_id,
-        "status":            RunStatus.pending,
-        "progress_percent":  0,
-        "current_step_key":  None,
-        "current_step_label":None,
-        "started_at":        _now(),
-        "completed_at":      None,
-        "steps":             [{"key": s["key"], "label": s["label"], "status": "pending"}
+        "run_id":             run_id,
+        "status":             RunStatus.pending,
+        "progress_percent":   0,
+        "current_step_key":   None,
+        "current_step_label": None,
+        "started_at":         _now(),
+        "completed_at":       None,
+        "steps":              [{"key": s["key"], "label": s["label"], "status": "pending"}
                                for s in PIPELINE_STEPS],
-        "errors":            [],
-        "result":            {},
-        "log_path":          log_path,
+        "errors":             [],
+        "result":             {},
+        "log_path":           "",
     }
 
     with _lock:

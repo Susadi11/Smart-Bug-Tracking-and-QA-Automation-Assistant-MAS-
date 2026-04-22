@@ -10,9 +10,10 @@ env/
 dist/
 build/
 
-# Backend outputs & logs
+# Backend outputs, logs & run data
 backend/output/
 backend/logs/
+backend/runs/
 
 # Node / Frontend
 frontend/node_modules/

@@ -1,6 +1,4 @@
-"""
-Shared global state passed through all agents in the MAS pipeline.
-"""
+"""Shared global state passed through all agents in the MAS pipeline."""
 
 from typing import TypedDict, Optional, List
 
@@ -17,7 +15,7 @@ class BugAnalysis(TypedDict):
 
 class TestCase(TypedDict):
     id: str
-    type: str        # Positive | Negative | Edge
+    type: str           # Positive | Negative | Edge
     description: str
     steps: List[str]
     expected: str
@@ -25,24 +23,24 @@ class TestCase(TypedDict):
 
 class RootCause(TypedDict):
     cause: str
-    likelihood: str  # High | Medium | Low
+    likelihood: str     # High | Medium | Low
     explanation: str
 
 
 class AgentState(TypedDict):
-    # ── Input ──────────────────────────────────────────────────────────────────
+    # Input fields
     bug_description: str
     code_snippet: Optional[str]
     platform: Optional[str]
     app_version: Optional[str]
     user_severity: Optional[str]
 
-    # ── Agent outputs ───────────────────────────────────────────────────────────
-    bug_analysis: Optional[BugAnalysis]       # Agent 1
-    test_cases: Optional[List[TestCase]]      # Agent 2
-    root_causes: Optional[List[RootCause]]    # Agent 3
-    bug_report: Optional[str]                 # Agent 4
+    # Agent outputs
+    bug_analysis: Optional[BugAnalysis]
+    test_cases: Optional[List[TestCase]]
+    root_causes: Optional[List[RootCause]]
+    bug_report: Optional[str]
 
-    # ── Pipeline metadata ────────────────────────────────────────────────────────
+    # Pipeline metadata
     log_path: str
     errors: List[str]

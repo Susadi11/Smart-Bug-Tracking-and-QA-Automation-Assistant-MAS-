@@ -1,3 +1,5 @@
+"""LangGraph pipeline definition — sequential four-agent workflow."""
+
 from langgraph.graph import StateGraph, START, END
 
 from state import AgentState
@@ -8,6 +10,7 @@ from agents.bug_report_generator import bug_report_generator_node
 
 
 def build_graph():
+    """Build and compile the LangGraph state machine."""
     g = StateGraph(AgentState)
     g.add_node("bug_analyzer", bug_analyzer_node)
     g.add_node("test_case_generator", test_case_generator_node)

@@ -1,17 +1,21 @@
-"""
-File I/O tools shared across all agents.
-"""
+"""File I/O tools shared across all agents."""
 
 import json
-import os
 from pathlib import Path
-from typing import Any
 
 
 def save_to_file(path: str, content: str) -> bool:
     """
-    Write content to path, creating parent dirs if needed.
+    Write content to path, creating parent directories if needed.
+
     Never raises — returns False on error.
+
+    Args:
+        path:    Destination file path (relative or absolute).
+        content: String content to write.
+
+    Returns:
+        True on success, False on failure.
     """
     try:
         p = Path(path)
@@ -23,7 +27,18 @@ def save_to_file(path: str, content: str) -> bool:
 
 
 def read_from_file(path: str) -> str:
-    """Read and return file contents. Raises FileNotFoundError if missing."""
+    """
+    Read and return file contents.
+
+    Args:
+        path: File path to read.
+
+    Returns:
+        The file's text content.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+    """
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"File not found: {path}")
@@ -32,8 +47,14 @@ def read_from_file(path: str) -> str:
 
 def append_log(log_path: str, entry: dict) -> None:
     """
-    Read existing JSON array from log_path (or start a new one),
-    append entry, and write back atomically.
+    Append a structured log entry to a JSON array file.
+
+    Reads the existing array (or starts a new one), appends the entry,
+    and writes back atomically via a temporary file.
+
+    Args:
+        log_path: Path to the JSON log file.
+        entry:    Dict to append.
     """
     p = Path(log_path)
     p.parent.mkdir(parents=True, exist_ok=True)

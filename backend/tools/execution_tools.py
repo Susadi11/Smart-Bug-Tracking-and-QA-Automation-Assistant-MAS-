@@ -1,6 +1,4 @@
-"""
-Test execution tool — runs pytest on a given file.
-"""
+"""Test execution tool — runs pytest on a given file."""
 
 import re
 import subprocess
@@ -8,8 +6,16 @@ import subprocess
 
 def run_pytest(file_path: str) -> dict:
     """
-    Run pytest on file_path and parse the summary line.
-    Never raises. Returns passed/failed/errors counts and full output.
+    Run pytest on a file and return structured results.
+
+    Never raises — returns zero counts on failure.
+
+    Args:
+        file_path: Path to the test file to execute.
+
+    Returns:
+        Dict with keys: passed, failed, errors (int counts),
+        and output (full pytest output string).
     """
     try:
         proc = subprocess.run(
@@ -18,7 +24,6 @@ def run_pytest(file_path: str) -> dict:
         )
         output = (proc.stdout + proc.stderr).strip()
 
-        # Parse "X passed, Y failed, Z error" from the summary line
         passed = failed = errors = 0
         summary_match = re.search(
             r"(\d+) passed|(\d+) failed|(\d+) error", output

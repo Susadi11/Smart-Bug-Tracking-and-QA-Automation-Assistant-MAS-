@@ -5,7 +5,6 @@ Usage: python main.py
 
 import json
 import os
-import sys
 import uuid
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -18,7 +17,7 @@ from agents.bug_analyzer import bug_analyzer_node
 
 def run_test(bug_description: str, code_snippet: str = None,
              platform: str = None, app_version: str = None) -> None:
-
+    """Run a single bug analysis and print the result."""
     model = os.getenv("OLLAMA_MODEL", "llama3:8b")
     run_id = str(uuid.uuid4())[:8]
     log_path = f"logs/run_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{run_id}.json"
@@ -57,7 +56,6 @@ def run_test(bug_description: str, code_snippet: str = None,
 
 
 if __name__ == "__main__":
-    # ── Test 1: Login bug ──────────────────────────────────────────────────────
     run_test(
         bug_description=(
             "When a user tries to log in with valid credentials on the mobile app, "
@@ -69,7 +67,6 @@ if __name__ == "__main__":
         app_version="2.3.1",
     )
 
-    # ── Test 2: Payment crash with code snippet ────────────────────────────────
     run_test(
         bug_description=(
             "The checkout page crashes with a TypeError when the user clicks Pay Now. "
