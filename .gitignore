@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 *.pyo
-.env
 .venv
 venv/
 env/
@@ -25,5 +24,6 @@ frontend/.env
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
+config.bat
+node_modules
