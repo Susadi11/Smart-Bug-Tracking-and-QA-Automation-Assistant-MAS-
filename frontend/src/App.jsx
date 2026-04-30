@@ -76,6 +76,7 @@ export default function App() {
   const [result, setResult]         = useState({})
   const [apiErrors, setApiErrors]   = useState([])
   const [submitErr, setSubmitErr]   = useState(null)
+  const [expandedTC, setExpandedTC] = useState(null)  // expanded test case id
 
   // Load default model from backend .env on mount
   useEffect(() => {
@@ -121,6 +122,7 @@ export default function App() {
     setProgress(0)
     setActive(null)
     setTab('bug_analysis')
+    setExpandedTC(null)
 
     try {
       const resp = await fetch(`${API_BASE}/api/runs`, {
@@ -543,10 +545,67 @@ export default function App() {
                 <div className="rb anim-in">
                   {tc && tc.length > 0 ? (
                     tc.map(t => (
-                      <div key={t.id} className="tc-row">
-                        <span className="tc-id">{t.id}</span>
-                        <span className={`tc-type ${tcColor[t.type] || ''}`}>{t.type}</span>
-                        <span className="tc-desc">{t.description}</span>
+                      <div key={t.id} className={`tc-card ${expandedTC === t.id ? 'tc-expanded' : ''}`}>
+                        <div 
+                          className="tc-header" 
+                          onClick={() => setExpandedTC(expandedTC === t.id ? null : t.id)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <span className="tc-expand-icon">{expandedTC === t.id ? '▾' : '▸'}</span>
+                          <span className="tc-id">{t.id}</span>
+                          <span className={`tc-type ${tcColor[t.type] || ''}`}>{t.type}</span>
+                          <span className="tc-desc">{t.description}</span>
+                        </div>
+                        {expandedTC === t.id && (
+                          <div className="tc-details">
+                            <div className="tc-metadata">
+                              <div className="tcm-row">
+                                <span className="tcm-label">Test Case ID:</span>
+                                <span className="tcm-value">{t.id}</span>
+                              </div>
+                              <div className="tcm-row">
+                                <span className="tcm-label">Test Case Title:</span>
+                                <span className="tcm-value">{t.description}</span>
+                              </div>
+                              <div className="tcm-row">
+                                <span className="tcm-label">Module:</span>
+                                <span className="tcm-value">{t.module}</span>
+                              </div>
+                              <div className="tcm-row">
+                                <span className="tcm-label">Sub-module:</span>
+                                <span className="tcm-value">{t.submodule}</span>
+                              </div>
+                              <div className="tcm-row">
+                                <span className="tcm-label">Priority:</span>
+                                <span className="tcm-value tcm-priority">{t.priority}</span>
+                              </div>
+                              <div className="tcm-row">
+                                <span className="tcm-label">Severity:</span>
+                                <span className="tcm-value tcm-severity">{t.severity}</span>
+                              </div>
+                              <div className="tcm-row">
+                                <span className="tcm-label">Test Type:</span>
+                                <span className="tcm-value">{t.test_type}</span>
+                              </div>
+                              <div className="tcm-row">
+                                <span className="tcm-label">Created Date:</span>
+                                <span className="tcm-value">{t.created_date}</span>
+                              </div>
+                            </div>
+                            <div className="tc-detail-group">
+                              <div className="tc-detail-label">Steps:</div>
+                              <ol className="tc-steps">
+                                {t.steps.map((step, i) => (
+                                  <li key={i}>{step}</li>
+                                ))}
+                              </ol>
+                            </div>
+                            <div className="tc-detail-group">
+                              <div className="tc-detail-label">Expected Result:</div>
+                              <p className="tc-expected">{t.expected}</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))
                   ) : (

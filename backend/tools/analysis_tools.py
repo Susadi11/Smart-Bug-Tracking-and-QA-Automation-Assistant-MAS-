@@ -4,6 +4,7 @@ Analysis tools: keyword extraction, component detection, and static analysis.
 
 import re
 import subprocess
+from datetime import date
 from typing import Dict, List
 
 
@@ -135,11 +136,17 @@ def generate_test_case_skeletons(bug_analysis: dict, count: int = 3) -> List[Dic
         count: Number of skeletons to return (minimum 3 recommended).
 
     Returns:
-        A list of skeleton dicts with keys: id, type, description, steps, expected.
+        A list of skeleton dicts with all test case metadata fields.
     """
     title = str(bug_analysis.get("title", "Bug scenario")).strip() or "Bug scenario"
     bug_steps = bug_analysis.get("steps_to_reproduce") or []
     steps = [str(s).strip() for s in bug_steps if str(s).strip()]
+    components = bug_analysis.get("affected_components") or ["General"]
+    primary_component = components[0] if components else "General"
+    severity = str(bug_analysis.get("severity", "High")).strip()
+    priority = str(bug_analysis.get("priority", "P2")).strip()
+    
+    today = date.today().isoformat()
 
     base_steps = steps if steps else ["Open the feature", "Perform the action", "Observe system behavior"]
 
@@ -147,23 +154,41 @@ def generate_test_case_skeletons(bug_analysis: dict, count: int = 3) -> List[Dic
         {
             "id": "TC-001",
             "type": "Positive",
+            "test_type": "Functional",
             "description": f"Verify expected behavior for {title}",
+            "module": primary_component,
+            "submodule": "Core functionality",
+            "priority": "High",
+            "severity": severity,
             "steps": base_steps,
             "expected": str(bug_analysis.get("expected_result", "System behaves as expected")),
+            "created_date": today,
         },
         {
             "id": "TC-002",
             "type": "Negative",
+            "test_type": "Functional",
             "description": f"Verify invalid or unexpected input handling for {title}",
+            "module": primary_component,
+            "submodule": "Error handling",
+            "priority": "Medium",
+            "severity": "Minor",
             "steps": base_steps[:2] + ["Provide invalid/unsupported input and repeat action"],
             "expected": "System rejects invalid input with a clear error message and remains stable",
+            "created_date": today,
         },
         {
             "id": "TC-003",
             "type": "Edge",
+            "test_type": "Functional",
             "description": f"Verify boundary conditions related to {title}",
+            "module": primary_component,
+            "submodule": "Boundary testing",
+            "priority": "Medium",
+            "severity": "Minor",
             "steps": base_steps[:2] + ["Execute at boundary/extreme limits and observe behavior"],
             "expected": "System handles boundary conditions without crash or incorrect result",
+            "created_date": today,
         },
     ]
 
