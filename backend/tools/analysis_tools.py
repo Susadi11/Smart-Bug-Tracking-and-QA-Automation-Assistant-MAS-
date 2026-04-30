@@ -4,7 +4,7 @@ Analysis tools: keyword extraction, component detection, and static analysis.
 
 import re
 import subprocess
-from typing import List
+from typing import Dict, List
 
 
 # Regex patterns mapping domain keywords to software component labels.
@@ -120,3 +120,102 @@ def run_static_analysis(file_path: str) -> dict:
         return {"issues": issues, "issue_count": len(issues), "raw_output": raw}
     except Exception as exc:
         return {"issues": [], "issue_count": 0, "raw_output": str(exc)}
+
+
+def generate_test_case_skeletons(bug_analysis: dict, count: int = 3) -> List[Dict[str, object]]:
+    """
+    Generate deterministic test-case skeletons from bug analysis.
+
+    This is useful as:
+      1) a scaffold shown to the LLM in prompts,
+      2) a fallback when model output is partial or malformed.
+
+    Args:
+        bug_analysis: Agent 1 output dict.
+        count: Number of skeletons to return (minimum 3 recommended).
+
+    Returns:
+        A list of skeleton dicts with keys: id, type, description, steps, expected.
+    """
+    title = str(bug_analysis.get("title", "Bug scenario")).strip() or "Bug scenario"
+    bug_steps = bug_analysis.get("steps_to_reproduce") or []
+    steps = [str(s).strip() for s in bug_steps if str(s).strip()]
+
+    base_steps = steps if steps else ["Open the feature", "Perform the action", "Observe system behavior"]
+
+    templates = [
+        {
+            "id": "TC-001",
+            "type": "Positive",
+            "description": f"Verify expected behavior for {title}",
+            "steps": base_steps,
+            "expected": str(bug_analysis.get("expected_result", "System behaves as expected")),
+        },
+        {
+            "id": "TC-002",
+            "type": "Negative",
+            "description": f"Verify invalid or unexpected input handling for {title}",
+            "steps": base_steps[:2] + ["Provide invalid/unsupported input and repeat action"],
+            "expected": "System rejects invalid input with a clear error message and remains stable",
+        },
+        {
+            "id": "TC-003",
+            "type": "Edge",
+            "description": f"Verify boundary conditions related to {title}",
+            "steps": base_steps[:2] + ["Execute at boundary/extreme limits and observe behavior"],
+            "expected": "System handles boundary conditions without crash or incorrect result",
+        },
+    ]
+
+    return templates[:max(1, count)]
+
+
+def evaluate_test_step_alignment(bug_steps: List[str], test_cases: List[dict]) -> Dict[str, object]:
+    """
+    Evaluate whether generated test-case steps cover the original bug steps.
+
+    Matching is keyword-based and intentionally lightweight.
+
+    Args:
+        bug_steps: Original steps_to_reproduce from bug analysis.
+        test_cases: Generated test cases.
+
+    Returns:
+        Dict with keys: coverage_ratio (float), covered_steps (int), total_steps (int),
+        and uncovered_steps (list[str]).
+    """
+    normalized_bug_steps = [str(step).strip() for step in bug_steps if str(step).strip()]
+    if not normalized_bug_steps:
+        return {
+            "coverage_ratio": 1.0,
+            "covered_steps": 0,
+            "total_steps": 0,
+            "uncovered_steps": [],
+        }
+
+    all_test_steps_text = " ".join(
+        " ".join(str(s) for s in (tc.get("steps") or []))
+        for tc in test_cases
+    ).lower()
+
+    covered = []
+    uncovered = []
+    for bug_step in normalized_bug_steps:
+        keywords = [k for k in re.findall(r"[a-zA-Z][a-zA-Z0-9_-]{2,}", bug_step.lower()) if k not in _STOP_WORDS]
+        if not keywords:
+            uncovered.append(bug_step)
+            continue
+        if any(keyword in all_test_steps_text for keyword in keywords):
+            covered.append(bug_step)
+        else:
+            uncovered.append(bug_step)
+
+    total = len(normalized_bug_steps)
+    covered_count = len(covered)
+    ratio = covered_count / total if total else 1.0
+    return {
+        "coverage_ratio": round(ratio, 2),
+        "covered_steps": covered_count,
+        "total_steps": total,
+        "uncovered_steps": uncovered,
+    }
