@@ -19,7 +19,7 @@ os.environ.setdefault("no_proxy", "localhost,127.0.0.1")
 
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import Any, Dict, List
 
 from langchain_core.prompts import PromptTemplate
@@ -47,15 +47,24 @@ Return ONLY valid JSON in this exact structure:
     {{
       "id": "TC-001",
       "type": "Positive",
+      "test_type": "Functional",
       "description": "<short description>",
+      "module": "<affected module>",
+      "submodule": "<sub-component>",
+      "priority": "High",
+      "severity": "Critical",
       "steps": ["<step 1>", "<step 2>", "<step 3>"],
-      "expected": "<expected result>"
+      "expected": "<expected result>",
+      "created_date": "{created_date}"
     }}
   ]
 }}
 
 Rules:
 - type must be one of: Positive, Negative, Edge
+- test_type must be one of: Functional, Non-Functional, Regression
+- priority must be one of: High, Medium, Low
+- severity must be one of: Critical, Major, Minor, Trivial
 - steps must be actionable and concise
 - test cases must reflect bug steps and affected components
 - return JSON only, no markdown or explanations
@@ -105,7 +114,7 @@ def _normalize_type(value: str) -> str:
     return "Edge"
 
 
-def _validate_test_case(item: Dict[str, Any], index: int) -> TestCase:
+def _validate_test_case(item: Dict[str, Any], index: int, created_date: str = "") -> TestCase:
     """Validate and coerce a single test case item."""
     required = {"id", "type", "description", "steps", "expected"}
     missing = required - item.keys()
@@ -121,13 +130,19 @@ def _validate_test_case(item: Dict[str, Any], index: int) -> TestCase:
     return TestCase(
         id=str(item["id"]).strip() or f"TC-{index:03d}",
         type=_normalize_type(str(item["type"])),
+        test_type=str(item.get("test_type", "Functional")).strip(),
         description=str(item["description"]).strip(),
+        module=str(item.get("module", "General")).strip(),
+        submodule=str(item.get("submodule", "General")).strip(),
+        priority=str(item.get("priority", "Medium")).strip(),
+        severity=str(item.get("severity", "Minor")).strip(),
         steps=[str(step).strip() for step in steps if str(step).strip()],
         expected=str(item["expected"]).strip(),
+        created_date=created_date,
     )
 
 
-def _validate_cases(payload: Dict[str, Any]) -> List[TestCase]:
+def _validate_cases(payload: Dict[str, Any], created_date: str = "") -> List[TestCase]:
     """Validate model payload and return a typed list of test cases."""
     if "test_cases" not in payload:
         raise ValueError("Missing 'test_cases' in model response")
@@ -135,7 +150,7 @@ def _validate_cases(payload: Dict[str, Any]) -> List[TestCase]:
     if not isinstance(raw_cases, list):
         raise ValueError("'test_cases' must be a list")
 
-    validated = [_validate_test_case(item, i + 1) for i, item in enumerate(raw_cases)]
+    validated = [_validate_test_case(item, i + 1, created_date=created_date) for i, item in enumerate(raw_cases)]
     if len(validated) < 3:
         raise ValueError("At least 3 test cases are required")
     if len(validated) > 5:
@@ -171,22 +186,24 @@ def test_case_generator_node(state: AgentState) -> AgentState:
         )
 
         templates = generate_test_case_skeletons(dict(bug_analysis), count=3)
+        today = date.today().isoformat()
         prompt = _PROMPT.format(
             bug_analysis_json=json.dumps(dict(bug_analysis), indent=2, ensure_ascii=False),
             template_json=json.dumps(templates, indent=2, ensure_ascii=False),
+            created_date=today,
         )
 
         raw = llm.invoke(prompt)
         try:
             parsed = _extract_json(raw)
-            generated = _validate_cases(parsed)
+            generated = _validate_cases(parsed, created_date=today)
         except Exception as parse_err:
             # JSON parsing failed; use skeleton fallback immediately
             generated = []
             fallback = generate_test_case_skeletons(dict(bug_analysis), count=3)
             for i, fb in enumerate(fallback, start=1):
                 try:
-                    generated.append(_validate_test_case(fb, i))
+                    generated.append(_validate_test_case(fb, i, created_date=today))
                 except Exception:
                     pass
             if not generated:
