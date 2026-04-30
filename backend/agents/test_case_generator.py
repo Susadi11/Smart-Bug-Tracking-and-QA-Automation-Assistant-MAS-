@@ -63,19 +63,34 @@ Rules:
 
 
 def _extract_json(raw: str) -> Dict[str, Any]:
-    """Extract JSON object from LLM output, tolerating markdown fences/text."""
+    """Extract JSON object from LLM output, with multiple fallback strategies."""
+    # Strategy 1: Try direct parse
     cleaned = re.sub(r"```(?:json)?", "", raw).strip()
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
-    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    
+    # Strategy 2: Find first { and attempt to build valid JSON by matching braces
+    start_idx = cleaned.find("{")
+    if start_idx != -1:
+        for end_idx in range(len(cleaned), start_idx, -1):
+            candidate = cleaned[start_idx:end_idx]
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+    
+    # Strategy 3: Try extracting "test_cases": [ ... ] array part
+    match = re.search(r'"test_cases"\s*:\s*\[.*\]', cleaned, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group())
+            partial = "{" + match.group() + "}"
+            return json.loads(partial)
         except json.JSONDecodeError:
             pass
-    raise ValueError(f"Cannot parse JSON from response:\n{raw[:400]}")
+    
+    raise ValueError(f"Cannot parse JSON from response:\n{raw[:500]}")
 
 
 def _normalize_type(value: str) -> str:
@@ -150,7 +165,7 @@ def test_case_generator_node(state: AgentState) -> AgentState:
             model=model,
             base_url=base_url,
             num_ctx=num_ctx,
-            num_predict=1536,
+            num_predict=2048,
             num_gpu=99,
             temperature=0.2,
         )
@@ -162,15 +177,20 @@ def test_case_generator_node(state: AgentState) -> AgentState:
         )
 
         raw = llm.invoke(prompt)
-        parsed = _extract_json(raw)
-        generated = _validate_cases(parsed)
-
-        if len(generated) < 3:
+        try:
+            parsed = _extract_json(raw)
+            generated = _validate_cases(parsed)
+        except Exception as parse_err:
+            # JSON parsing failed; use skeleton fallback immediately
+            generated = []
             fallback = generate_test_case_skeletons(dict(bug_analysis), count=3)
             for i, fb in enumerate(fallback, start=1):
-                if len(generated) >= 3:
-                    break
-                generated.append(_validate_test_case(fb, i))
+                try:
+                    generated.append(_validate_test_case(fb, i))
+                except Exception:
+                    pass
+            if not generated:
+                raise ValueError(f"Failed to parse LLM response and skeletons failed: {parse_err}")
 
         alignment = evaluate_test_step_alignment(
             bug_steps=list(bug_analysis.get("steps_to_reproduce", [])),
