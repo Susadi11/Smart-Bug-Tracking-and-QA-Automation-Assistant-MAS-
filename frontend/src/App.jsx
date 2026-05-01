@@ -618,12 +618,23 @@ export default function App() {
               {revealed[activeTab] && activeTab === 'root_causes' && (
                 <div className="rb anim-in">
                   {rc && rc.length > 0 ? (
-                    rc.map((r, i) => (
-                      <div key={i} className="rc-row">
-                        <span className={`rc-lh ${lhColor[r.likelihood] || ''}`}>{r.likelihood}</span>
-                        <span className="rc-txt">{r.cause}</span>
-                      </div>
-                    ))
+                    <>
+                      <p className="rc-intro">
+                        {rc.length} possible root {rc.length === 1 ? 'cause' : 'causes'} identified — ordered by likelihood.
+                      </p>
+                      {rc.map((r, i) => (
+                        <div key={i} className="rc-card">
+                          <div className="rc-card-header">
+                            <span className="rc-num">{String(i + 1).padStart(2, '0')}</span>
+                            <span className={`rc-lh ${lhColor[r.likelihood] || ''}`}>{r.likelihood}</span>
+                            <span className="rc-cause">{r.cause}</span>
+                          </div>
+                          {r.explanation && (
+                            <p className="rc-explanation">{r.explanation}</p>
+                          )}
+                        </div>
+                      ))}
+                    </>
                   ) : (
                     <div className="not-impl">Agent 3 — Root Cause Analyzer not yet implemented.</div>
                   )}
