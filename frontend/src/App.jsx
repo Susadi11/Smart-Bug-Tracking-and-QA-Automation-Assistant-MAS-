@@ -176,6 +176,11 @@ export default function App() {
         const done = run.steps.filter(s => s.status === 'completed').map(s => s.key)
         setDone(done)
 
+        // Update result on every poll so completed tabs show data immediately
+        if (run.result && Object.keys(run.result).length > 0) {
+          setResult(run.result)
+        }
+
         // Reveal tabs for all completed agents (even if they have no output yet)
         const newRevealed = {}
         run.steps.forEach(step => {

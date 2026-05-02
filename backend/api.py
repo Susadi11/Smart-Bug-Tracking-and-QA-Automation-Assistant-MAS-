@@ -198,25 +198,27 @@ def _pipeline_worker(run_id: str, req: RunCreateRequest) -> None:
 
             state = agent_fn(state)
 
+            # Build result incrementally so the frontend can read it mid-pipeline.
+            intermediate: Dict[str, Any] = {}
+            if state.get("bug_analysis"):
+                intermediate["bug_analysis"] = dict(state["bug_analysis"])
+            if state.get("test_cases"):
+                intermediate["test_cases"] = [dict(tc) for tc in state["test_cases"]]
+            if state.get("root_causes"):
+                intermediate["root_causes"] = [dict(rc) for rc in state["root_causes"]]
+            if state.get("bug_report"):
+                intermediate["bug_report"] = state["bug_report"]
+
             with _lock:
                 run["steps"][i]["status"] = "completed"
                 run["progress_percent"]   = (i + 1) * 25
+                run["result"]             = intermediate
                 _save_run(run)
-
-        result: Dict[str, Any] = {}
-        if state.get("bug_analysis"):
-            result["bug_analysis"] = dict(state["bug_analysis"])
-        if state.get("test_cases"):
-            result["test_cases"] = [dict(tc) for tc in state["test_cases"]]
-        if state.get("root_causes"):
-            result["root_causes"] = [dict(rc) for rc in state["root_causes"]]
-        if state.get("bug_report"):
-            result["bug_report"] = state["bug_report"]
 
         with _lock:
             run["status"]       = RunStatus.completed
             run["completed_at"] = _now()
-            run["result"]       = result
+            run["result"]       = intermediate
             run["errors"]       = state.get("errors", [])
             _save_run(run)
 
